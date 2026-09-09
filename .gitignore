@@ -12,3 +12,4 @@ credentials.json
 *.bak
 *.dev
 *.log
+autoclawpi-service.bat

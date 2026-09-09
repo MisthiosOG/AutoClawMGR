@@ -9,16 +9,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
 	"time"
 
+	fhttp "github.com/bogdanfinn/fhttp"
+	tls_client "github.com/bogdanfinn/tls-client"
 	"github.com/MisthiosOG/autoclawpi/internal/sign"
 )
 
 // Client adalah HTTP client ke API AutoClaw.
 type Client struct {
-	HTTP          *http.Client
+	HTTP          tls_client.HttpClient
 	InferenceBase string // https://autoglm-api.autoglm.ai/autoclaw-proxy/proxy/autoclaw
 	UserAPIBase   string // https://autoglm-api.autoglm.ai
 	Version       string
@@ -27,12 +28,16 @@ type Client struct {
 // New membuat client dengan default yang masuk akal.
 func New(inferenceBase, userAPIBase string) *Client {
 	c := &Client{
-		HTTP:          &http.Client{Timeout: 0},
 		InferenceBase: inferenceBase,
 		UserAPIBase:   userAPIBase,
 		Version:       "1.17.8",
 	}
-	c.applyChromeTLS() // TLS fingerprint meniru Chrome — WAF gak bedain dengan app Electron
+	// tls-client Chrome 131 — full browser fingerprint (JA3 + HTTP/2 + header order)
+	httpClient, err := newChromeClient("")
+	if err != nil {
+		panic(fmt.Sprintf("fatal: cannot create tls-client: %v", err))
+	}
+	c.HTTP = httpClient
 	return c
 }
 
@@ -53,9 +58,19 @@ func deviceID() string {
 	return deviceIDCache
 }
 
-// Do melakukan request dengan User-Agent aplikasi.
-func (c *Client) Do(req *http.Request) (*http.Response, error) {
-	req.Header.Set("User-Agent", "AutoClaw/"+c.Version)
+// Do melakukan request dengan full Chrome browser headers (PRD 4.2).
+// Header order dijaga oleh fhttp + tls-client (bukan Go stdlib map ordering).
+func (c *Client) Do(req *fhttp.Request) (*fhttp.Response, error) {
+	// Set Chrome browser headers — merge dengan yang sudah ada di request
+	// (Jangan overwrite Content-Type / Authorization yang sudah diset caller).
+	chrome := chromeHeaders()
+	for key, vals := range chrome {
+		if req.Header.Get(key) == "" {
+			for _, v := range vals {
+				req.Header.Add(key, v)
+			}
+		}
+	}
 	return c.HTTP.Do(req)
 }
 
@@ -182,7 +197,7 @@ func (c *Client) ClaimTask(ctx context.Context, token, taskID string) (int, bool
 	delete(hdrs, "X-Authorization") // inference header gak dipake
 
 	body := fmt.Sprintf(`{"task_id":"%s"}`, taskID)
-	req, err := http.NewRequestWithContext(ctx, "POST",
+	req, err := fhttp.NewRequestWithContext(ctx, "POST",
 		c.UserAPIBase+"/autoclaw-proxy/proxy/autoclaw-task-complete",
 		strings.NewReader(body))
 	if err != nil {
@@ -230,7 +245,7 @@ func (c *Client) ClaimNewbieToken(ctx context.Context, accessToken string) (stri
 	if !strings.HasPrefix(tok, "Bearer ") {
 		tok = "Bearer " + tok
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+	req, err := fhttp.NewRequestWithContext(ctx, fhttp.MethodPost,
 		c.UserAPIBase+"/autoclaw-proxy/proxy/autoclaw-newbie-guide/token", nil)
 	if err != nil {
 		return "", err
@@ -267,7 +282,7 @@ func (c *Client) NewbieGuideToken(ctx context.Context, accessToken string) (stri
 	if !strings.HasPrefix(tok, "Bearer ") {
 		tok = "Bearer " + tok
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+	req, err := fhttp.NewRequestWithContext(ctx, fhttp.MethodPost,
 		c.UserAPIBase+"/autoclaw-proxy/proxy/autoclaw-newbie-guide/token", nil)
 	if err != nil {
 		return "", err
@@ -315,7 +330,7 @@ func (c *Client) ClaimPromotionReward(ctx context.Context, accessToken, modalID,
 		"modal_id":    modalID,
 		"reward_type": rewardType,
 	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+	req, err := fhttp.NewRequestWithContext(ctx, fhttp.MethodPost,
 		c.UserAPIBase+"/autoclaw-proxy/proxy/autoclaw-promotion-reward", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -349,7 +364,7 @@ func (c *Client) userapiPostWithHeaders(ctx context.Context, path string, body a
 			return err
 		}
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.UserAPIBase+path, &buf)
+	req, err := fhttp.NewRequestWithContext(ctx, fhttp.MethodPost, c.UserAPIBase+path, &buf)
 	if err != nil {
 		return err
 	}
@@ -363,7 +378,7 @@ func (c *Client) userapiPostWithHeaders(ctx context.Context, path string, body a
 	return c.doJSON(req, out)
 }
 
-func (c *Client) doJSON(req *http.Request, out any) error {
+func (c *Client) doJSON(req *fhttp.Request, out any) error {
 	resp, err := c.Do(req)
 	if err != nil {
 		return err

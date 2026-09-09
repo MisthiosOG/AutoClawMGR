@@ -18,6 +18,9 @@ import (
 
 	"github.com/MisthiosOG/autoclawpi/internal/client"
 	"github.com/MisthiosOG/autoclawpi/internal/db"
+
+	tls_client "github.com/bogdanfinn/tls-client"
+	fhttp "github.com/bogdanfinn/fhttp"
 )
 
 // Server adalah proxy server OpenAI-compatible.
@@ -37,7 +40,7 @@ type Server struct {
 
 	// cache http.Client per proxy URL (proxy pool — outbound IP per akun)
 	proxyMu      sync.Mutex
-	proxyClients map[string]*http.Client
+	proxyClients map[string]tls_client.HttpClient
 
 	// pacing humanlike per akun: request terakhir per acctID (anti anomali)
 	lastReqMu sync.Mutex
@@ -413,7 +416,7 @@ func (s *Server) forward(r *http.Request, acct db.Account, route string, body []
 	url := base + "/v1/chat/completions"
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	req, err := fhttp.NewRequestWithContext(ctx, fhttp.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return 0, "", fmt.Errorf("buat request: %w", err)
 	}
@@ -421,7 +424,7 @@ func (s *Server) forward(r *http.Request, acct db.Account, route string, body []
 	headers := s.cl.InferenceHeader(acct.AccessToken, route)
 	headers["Content-Type"] = "application/json"
 	// Proxy pool: kalau akun punya proxy aktif, keluar lewat IP itu.
-	hc := s.cl.HTTP
+	var hc tls_client.HttpClient = s.cl.HTTP
 	if proxyURL := db.AccountProxyURL(acct.ID); proxyURL != "" {
 		if pc := s.proxyHTTPClient(proxyURL); pc != nil {
 			hc = pc
@@ -756,7 +759,7 @@ func logUsage(acctID int64, model string, body []byte, dur time.Duration) {
 }
 
 // proxyHTTPClient: http.Client dengan transport proxy (cached per URL).
-func (s *Server) proxyHTTPClient(proxyURL string) *http.Client {
+func (s *Server) proxyHTTPClient(proxyURL string) tls_client.HttpClient {
 	s.proxyMu.Lock()
 	defer s.proxyMu.Unlock()
 	if c, ok := s.proxyClients[proxyURL]; ok {
@@ -766,10 +769,12 @@ func (s *Server) proxyHTTPClient(proxyURL string) *http.Client {
 	if err != nil || pu.Scheme == "" || pu.Host == "" {
 		return nil
 	}
-	tr := client.NewChromeTransportForProxy(pu)
-	c := &http.Client{Transport: tr}
+	c, cerr := client.NewChromeClientForProxy(proxyURL)
+	if cerr != nil {
+		return nil
+	}
 	if s.proxyClients == nil {
-		s.proxyClients = make(map[string]*http.Client)
+		s.proxyClients = make(map[string]tls_client.HttpClient)
 	}
 	s.proxyClients[proxyURL] = c
 	return c

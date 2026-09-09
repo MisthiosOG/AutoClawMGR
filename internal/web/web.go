@@ -22,6 +22,8 @@ import (
 	"github.com/MisthiosOG/autoclawpi/internal/config"
 	"github.com/MisthiosOG/autoclawpi/internal/db"
 	"github.com/MisthiosOG/autoclawpi/internal/sign"
+
+	fhttp "github.com/bogdanfinn/fhttp"
 )
 
 //go:embed templates/*.html
@@ -1367,7 +1369,7 @@ func fetchBalance(ctx context.Context, token string, cl *client.Client) int {
 		"X-Auth-Sign":      sign.Sign(ts),
 		"X-Trace-Id":       sign.UUID(),
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", cl.UserAPIBase+"/agent-assetmgr/api/v1/wallet-instances?biz_app_id=autoclaw", nil)
+	req, err := fhttp.NewRequestWithContext(ctx, "GET", cl.UserAPIBase+"/agent-assetmgr/api/v1/wallet-instances?biz_app_id=autoclaw", nil)
 	if err != nil {
 		return 0
 	}

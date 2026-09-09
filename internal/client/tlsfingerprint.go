@@ -1,111 +1,54 @@
+// Package client — HTTP client dengan full browser fingerprint via tls-client.
+//
+// Mengganti custom utls transport dengan bogdanfinn/tls-client yang
+// meniru Chrome secara utuh: JA3/JA4 TLS fingerprint, HTTP/2 frame
+// ordering (SETTINGS, WINDOW_UPDATE, PRIORITY), dan header ordering —
+// ketiganya sekaligus, bukan hanya handshake (PRD 4.1 + 4.2).
 package client
 
-// tlsfingerprint.go — TLS fingerprint spoofing (utls): jabat tangan TLS kita
-// meniru Chrome/Chromium (yang dipakai app AutoClaw/Electron), bukan fingerprint
-// bawaan Go yang gampang dibedakan WAF (JA3 check).
-
 import (
-	"context"
-	"net"
-	neturl "net/url"
-	"net/http"
-	"time"
-
-	utls "github.com/refraction-networking/utls"
+	http "github.com/bogdanfinn/fhttp"
+	tls_client "github.com/bogdanfinn/tls-client"
+	"github.com/bogdanfinn/tls-client/profiles"
 )
 
-// utlsTransport: http.RoundTripper yang dial-nya pakai utls ClientHelloID Chrome.
-type utlsTransport struct {
-	proxy *http.Transport // fallback transport untuk setting proxy/timeout dasar
-}
-
-func newChromeTransport(proxyURL string) http.RoundTripper {
-	base := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
+// newChromeClient membuat tls-client dengan profile Chrome desktop.
+// Proxy direspon via environment (HTTP_PROXY/HTTPS_PROXY).
+func newChromeClient(proxyURL string) (tls_client.HttpClient, error) {
+	options := []tls_client.HttpClientOption{
+		tls_client.WithTimeoutSeconds(30),
+		tls_client.WithClientProfile(profiles.Chrome_131),
+		tls_client.WithNotFollowRedirects(),
+		tls_client.WithInsecureSkipVerify(),
 	}
 	if proxyURL != "" {
-		if pu, err := parseProxyURL(proxyURL); err == nil {
-			base.Proxy = http.ProxyURL(pu)
-		}
+		options = append(options, tls_client.WithProxyUrl(proxyURL))
 	}
-	base.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-		rawConn, err := (&net.Dialer{Timeout: 15 * time.Second}).DialContext(ctx, network, addr)
-		if err != nil {
-			return nil, err
-		}
-		host, _, serr := net.SplitHostPort(addr)
-		if serr != nil {
-			host = addr
-		}
-		cfg := &utls.Config{ServerName: host}
-		uconn := utls.UClient(rawConn, cfg, utls.HelloChrome_Auto)
-		forceHTTP1ALPN(uconn)
-		if err := uconn.HandshakeContext(ctx); err != nil {
-			rawConn.Close()
-			return nil, err
-		}
-		return uconn, nil
-	}
-	return base
+	return tls_client.NewHttpClient(tls_client.NewNoopLogger(), options...)
 }
 
-// applyChromeTLS: ganti HTTP client dengan transport ber-fingerprint Chrome.
-// Apply ke client utama + semua proxy client yang sudah ter-cache.
-func (c *Client) applyChromeTLS() {
-	if c.HTTP == nil {
-		c.HTTP = &http.Client{}
+// chromeHeaders mengembalikan header set identik browser Chromium di
+// platform Windows (PRD 4.2 — UA & Client-Hints parity, Accept standar).
+func chromeHeaders() http.Header {
+	return http.Header{
+		"sec-ch-ua":            {`"Chromium";v="131", "Not_A Brand";v="24"`},
+		"sec-ch-ua-mobile":     {"?0"},
+		"sec-ch-ua-platform":   {`"Windows"`},
+		"upgrade-insecure-requests": {"1"},
+		"user-agent":           {"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+		"accept":               {"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"},
+		"sec-fetch-site":       {"none"},
+		"sec-fetch-mode":       {"navigate"},
+		"sec-fetch-user":       {"?1"},
+		"sec-fetch-dest":       {"document"},
+		"accept-encoding":      {"gzip, deflate, br, zstd"},
+		"accept-language":      {"id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7"},
 	}
-	c.HTTP.Transport = newChromeTransport("")
 }
 
-func parseProxyURL(raw string) (*neturl.URL, error) {
-	return neturl.Parse(raw)
-}
 
-// forceHTTP1ALPN: hapus "h2" dari ALPN di ClientHello yang sudah dibangun
-// preset Chrome — request kita HTTP/1.1, negotiated h2 bikin framing error.
-func forceHTTP1ALPN(uconn *utls.UConn) {
-	if err := uconn.BuildHandshakeState(); err != nil {
-		return
-	}
-	for i, ext := range uconn.Extensions {
-		if alpn, ok := ext.(*utls.ALPNExtension); ok {
-			alpn.AlpnProtocols = []string{"http/1.1"}
-			uconn.Extensions[i] = alpn
-			break
-		}
-	}
-	// rebuild handshake setelah patch
-	_ = uconn.BuildHandshakeState()
-}
-
-// newChromeTransportForProxy: transport dengan proxy + TLS fingerprint Chrome.
-func NewChromeTransportForProxy(pu *neturl.URL) http.RoundTripper {
-	base := &http.Transport{
-		Proxy:               http.ProxyURL(pu),
-		TLSHandshakeTimeout: 10 * time.Second,
-	}
-	base.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-		rawConn, err := (&net.Dialer{Timeout: 15 * time.Second}).DialContext(ctx, network, addr)
-		if err != nil {
-			return nil, err
-		}
-		host, _, serr := net.SplitHostPort(addr)
-		if serr != nil {
-			host = addr
-		}
-		cfg := &utls.Config{ServerName: host}
-		uconn := utls.UClient(rawConn, cfg, utls.HelloChrome_Auto)
-		forceHTTP1ALPN(uconn)
-		if err := uconn.HandshakeContext(ctx); err != nil {
-			rawConn.Close()
-			return nil, err
-		}
-		return uconn, nil
-	}
-	return base
+// NewChromeClientForProxy membuat tls-client Chrome fingerprint dengan proxy.
+// Dipakai server.go untuk proxy pool per-akun.
+func NewChromeClientForProxy(proxyURL string) (tls_client.HttpClient, error) {
+    return newChromeClient(proxyURL)
 }

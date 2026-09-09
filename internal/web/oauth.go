@@ -47,9 +47,11 @@ func (s *Server) clientFor(pend *oauthPending) *client.Client {
 	if err != nil || pu.Host == "" {
 		return s.cl
 	}
-	tr := &http.Transport{Proxy: http.ProxyURL(pu), TLSHandshakeTimeout: 10 * time.Second}
 	cl := client.New(s.cl.InferenceBase, s.cl.UserAPIBase)
-	cl.HTTP = &http.Client{Transport: tr}
+	proxyClient, perr := client.NewChromeClientForProxy(pend.loginProxyURL)
+	if perr == nil {
+		cl.HTTP = proxyClient
+	}
 	cl.Version = s.cl.Version
 	return cl
 }
