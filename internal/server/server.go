@@ -286,6 +286,12 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			failures = append(failures, fmt.Sprintf("#%d inactive/kosong", acct.ID))
 			continue
 		}
+		// PRD 4.4: akun yang baru kena WAF block di-quarantine 15 menit —
+		// jangan buang request lagi ke akun yang fingerprint-nya lagi di-flag.
+		if breaker.isQuarantined(acct.ID) {
+			failures = append(failures, fmt.Sprintf("#%d WAF quarantine", acct.ID))
+			continue
+		}
 		attemptStart := time.Now()
 		s.paceAccount(acct.ID) // humanlike pacing per akun
 
@@ -325,12 +331,28 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			failures = append(failures, fmt.Sprintf("#%d retry status %d", acct.ID, status))
 			continue
 		}
-		// 403 — WAF block, coba akun berikutnya
+		// 403 — WAF block: PRD 4.4 circuit breaker. Quarantine akun ini +
+		// backoff with jitter SEBELUM coba akun berikutnya. Tanpa ini satu
+		// request kena 403 membakar seluruh pool dalam hitungan detik
+		// (blind failover loop — WAF memblokir berdasarkan IP/fingerprint,
+		// bukan akun, jadi failover cepat hanya mempercepat pemblokiran
+		// seluruh pool).
 		if status == 403 {
-			log.Printf("[autoclawpi] akun #%d WAF block, coba akun berikutnya", acct.ID)
+			breaker.quarantine(acct.ID)
+			tripped, wait := breaker.record()
+			log.Printf("[autoclawpi] akun #%d WAF block → quarantine %v", acct.ID, quarantineDuration)
+			if tripped && wait > 0 {
+				log.Printf("[autoclawpi] circuit trip: menunggu %v sebelum lanjut (backoff+jitter)", wait.Round(time.Millisecond))
+				select {
+				case <-time.After(wait):
+				case <-r.Context().Done():
+					return
+				}
+			} else {
+				time.Sleep(500 * time.Millisecond)
+			}
 			failures = append(failures, fmt.Sprintf("#%d WAF block (403)", acct.ID))
 			go logAttempt(acct.ID, route, 403, fmt.Errorf("WAF block"), time.Since(attemptStart))
-			time.Sleep(500 * time.Millisecond)
 			continue
 		}
 		// 429 rate-limit upstream — tunggu lalu coba akun berikutnya
