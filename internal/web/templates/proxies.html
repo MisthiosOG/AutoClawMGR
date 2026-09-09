@@ -1,0 +1,97 @@
+{{define "content"}}
+<div class="page-head">
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="page-head-ic">
+      <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg>
+    </div>
+    <div>
+      <h1>Proxy Pools</h1>
+      <div class="subtitle">Outbound IP per akun — hindari ban berbasis IP/device</div>
+    </div>
+  </div>
+</div>
+<div class="rule"></div>
+
+<div class="card">
+  <div class="card-top">
+    <div class="label">Add Proxy</div>
+    <div class="icon-circle">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </div>
+  </div>
+  <form hx-post="/proxies/add" hx-target="#proxy-msg" style="margin-top:8px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="text" name="ip" placeholder="IP / host" style="flex:2;min-width:140px;font-family:var(--font-mono);font-size:12px" required>
+      <input type="text" name="port" placeholder="Port" style="flex:1;min-width:80px;font-family:var(--font-mono);font-size:12px" required>
+      <input type="text" name="user" placeholder="User (opsional)" style="flex:1.5;min-width:120px;font-family:var(--font-mono);font-size:12px">
+      <input type="password" name="pass" placeholder="Pass (opsional)" style="flex:1.5;min-width:120px;font-family:var(--font-mono);font-size:12px">
+      <button type="submit" class="btn btn-primary" style="flex-shrink:0"><i class="fas fa-plus"></i> Add</button>
+    </div>
+  </form>
+  <div style="margin-top:6px;font-size:11px;color:var(--faint)">Nama otomatis = IP. Buat banyak sekaligus? Pakai Batch Import di bawah.</div>
+  <div id="proxy-msg" style="margin-top:8px;font-size:13px"></div>
+</div>
+
+<div class="card">
+  <div class="card-top">
+    <div class="label">Batch Import</div>
+    <div class="icon-circle">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </div>
+  </div>
+  <div style="font-size:12px;color:#6b6b76;margin-top:-4px">Paste banyak proxy sekaligus — satu per baris. Format: <code style="color:#8b9ce4">ip:port:user:pass</code> atau <code style="color:#8b9ce4">ip:port</code> atau URL lengkap. Output tool checker (dengan prefix [+] dll) juga langsung ke-paste.</div>
+  <form hx-post="/proxies/batch" hx-target="#batch-msg" style="margin-top:10px">
+    <textarea name="proxies" rows="5" placeholder="104.207.55.190:3129:user:pass&#10;104.207.45.89:3129:user:pass&#10;..." style="font-family:var(--font-mono);font-size:11.5px"></textarea>
+    <button type="submit" class="btn btn-primary" style="margin-top:8px"><i class="fas fa-file-import"></i> Import Batch</button>
+  </form>
+  <div id="batch-msg" style="margin-top:8px;font-size:13px"></div>
+</div>
+
+<div class="section-title">Active Proxies</div>
+<div class="acct-list" id="proxy-list">
+  {{range .Proxies}}
+  <div class="acct-row">
+    <span class="status-dot {{if .Active}}online{{else}}offline{{end}}"></span>
+    <div class="acct-info">
+      <div class="acct-email">{{.Name}} {{if .LastStatus}}<span class="badge {{if stringsHasPrefix .LastStatus "OK"}}badge-success{{else if .LastStatus}}badge-danger{{end}}" style="margin-left:6px">{{.LastStatus}}</span>{{end}}</div>
+      <div class="acct-meta" style="font-family:var(--font-mono)">{{.URL}}</div>
+      {{if .LastTested}}<div class="acct-meta">Last tested: {{slice .LastTested 0 19}}</div>{{end}}
+    </div>
+    <div class="row-actions">
+      <button class="btn btn-ghost" style="padding:6px 12px" title="Test koneksi" hx-post="/proxies/test" hx-vals='{"id":"{{.ID}}"}' hx-target="closest .acct-row" hx-swap="none" onclick="this.innerHTML='<i class=\'fas fa-spinner fa-spin\'></i>'"><i class="fas fa-plug"></i></button>
+      <a href="/proxies/delete?id={{.ID}}" class="btn btn-danger" style="padding:6px 12px" onclick="return confirm('Hapus proxy {{.Name}}?')"><i class="fas fa-trash"></i></a>
+      <a href="/proxies/toggle?id={{.ID}}&active={{if .Active}}0{{else}}1{{end}}" class="btn {{if .Active}}btn-success{{else}}btn-ghost{{end}}" style="padding:6px 12px">{{if .Active}}ON{{else}}OFF{{end}}</a>
+    </div>
+  </div>
+  {{else}}
+  <div class="acct-row" style="justify-content:center;padding:30px">
+    <div style="text-align:center">
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px">Belum ada proxy</div>
+      <div class="acct-meta">Tambahkan HTTP proxy di atas, lalu bind ke akun di halaman Accounts</div>
+    </div>
+  </div>
+  {{end}}
+</div>
+
+<div class="card" style="margin-top:18px">
+  <div class="card-top">
+    <div class="label">Cara kerja</div>
+    <div class="icon-circle">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+  </div>
+  <div style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.7">
+    Request inference akun yang di-bind ke proxy akan <b style="color:var(--ink)">keluar lewat IP proxy</b>, bukan IP kamu.
+    Akun tanpa binding = langsung dari IP utama. Test dulu tiap proxy (tombol 🔌) sebelum dipakai.
+    Kalau proxy mati/salah, request otomatis error jelas di tab Logs.
+  </div>
+</div>
+
+<script>
+document.body.addEventListener('htmx:afterSwap', function(e){
+  var t = e.detail.target;
+  // hasil test proxy → reload biar badge status ke-update
+  if(t.tagName === 'SPAN' && t.closest('.acct-row')){ setTimeout(function(){ location.reload(); }, 800); }
+});
+</script>
+{{end}}

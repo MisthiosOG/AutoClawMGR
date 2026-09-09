@@ -1,4 +1,4 @@
-/autoclawpi
+**/autoclawpi
 /tmp/
 *.db
 *.db-journal
@@ -6,3 +6,9 @@
 *.db-shm
 .env
 credentials.json
+# build artifacts — binary never pushed
+*.exe
+*.exe~
+*.bak
+*.dev
+*.log

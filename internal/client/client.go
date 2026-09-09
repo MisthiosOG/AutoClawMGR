@@ -10,11 +10,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/hirotomasato/autoclawpi/internal/sign"
+	"github.com/MisthiosOG/autoclawpi/internal/sign"
 )
 
 // Client adalah HTTP client ke API AutoClaw.
@@ -27,28 +26,30 @@ type Client struct {
 
 // New membuat client dengan default yang masuk akal.
 func New(inferenceBase, userAPIBase string) *Client {
-	return &Client{
+	c := &Client{
 		HTTP:          &http.Client{Timeout: 0},
 		InferenceBase: inferenceBase,
 		UserAPIBase:   userAPIBase,
-		Version:       "1.17.9",
+		Version:       "1.17.8",
 	}
+	c.applyChromeTLS() // TLS fingerprint meniru Chrome — WAF gak bedain dengan app Electron
+	return c
 }
 
 // deviceID mengembalikan ID perangkat persisten.
 var deviceIDCache string
 
+// deviceID acak per proses — JANGAN hostname-based: AutoClaw nge-flag
+// device (hostname), akun baru dari device yang sama langsung ikut kena ban.
+// ponytail: random 16 hex per proses; kalau mau persisten per-install,
+// simpan ke config (upgrade path).
 func deviceID() string {
 	if deviceIDCache != "" {
 		return deviceIDCache
 	}
-	h, _ := os.Hostname()
-	if h == "" {
-		h = "unknown"
-	}
-	b := make([]byte, 4)
+	b := make([]byte, 8)
 	rand.Read(b)
-	deviceIDCache = fmt.Sprintf("%s-%s", h, hex.EncodeToString(b))
+	deviceIDCache = hex.EncodeToString(b)
 	return deviceIDCache
 }
 
@@ -260,6 +261,49 @@ func (c *Client) ClaimNewbieToken(ctx context.Context, accessToken string) (stri
 	return out.Token, nil
 }
 
+// NewbieGuideToken mengambil token bonus 100M untuk akun (TTL ~3 jam dari server).
+func (c *Client) NewbieGuideToken(ctx context.Context, accessToken string) (string, error) {
+	tok := accessToken
+	if !strings.HasPrefix(tok, "Bearer ") {
+		tok = "Bearer " + tok
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.UserAPIBase+"/autoclaw-proxy/proxy/autoclaw-newbie-guide/token", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("X-Authorization", tok)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(b, 300))
+	}
+	var out struct {
+		Token string `json:"token"`
+		Data  *struct {
+			Token string `json:"token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		return "", fmt.Errorf("payload bukan JSON: %s", truncate(b, 200))
+	}
+	if out.Token == "" && out.Data != nil {
+		out.Token = out.Data.Token
+	}
+	if out.Token == "" {
+		return "", fmt.Errorf("token kosong: %s", truncate(b, 300))
+	}
+	return out.Token, nil
+}
+
 // ClaimPromotionReward mengklaim reward promosi (modal_id + reward_type).
 // Header X-Authorization sama kayak ClaimNewbieToken.
 func (c *Client) ClaimPromotionReward(ctx context.Context, accessToken, modalID, rewardType string) (json.RawMessage, error) {
@@ -359,7 +403,7 @@ func (c *Client) InferenceHeader(accessToken, routeModelID string) map[string]st
 		"X-Request-Model":  routeModelID,
 		"X-Product":        "autoclaw",
 		"X-Harness-Type":   "zcode",
-		"X-Tm":             "linux",
+		"X-Tm":             "win",
 		"X-Version":        c.Version,
 		"X-Lang":           "id",
 		"x_trace_id":       sign.UUID(),

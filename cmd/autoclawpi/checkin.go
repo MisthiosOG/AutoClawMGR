@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hirotomasato/autoclawpi/internal/db"
-	"github.com/hirotomasato/autoclawpi/internal/sign"
+	"github.com/MisthiosOG/autoclawpi/internal/db"
+	"github.com/MisthiosOG/autoclawpi/internal/sign"
 )
 
 // task yang bisa di-check-in

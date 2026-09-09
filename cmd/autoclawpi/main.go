@@ -15,12 +15,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hirotomasato/autoclawpi/internal/client"
-	"github.com/hirotomasato/autoclawpi/internal/config"
-	"github.com/hirotomasato/autoclawpi/internal/db"
-	"github.com/hirotomasato/autoclawpi/internal/server"
-	"github.com/hirotomasato/autoclawpi/internal/store"
-	"github.com/hirotomasato/autoclawpi/internal/web"
+	"github.com/MisthiosOG/autoclawpi/internal/client"
+	"github.com/MisthiosOG/autoclawpi/internal/config"
+	"github.com/MisthiosOG/autoclawpi/internal/db"
+	"github.com/MisthiosOG/autoclawpi/internal/server"
+	"github.com/MisthiosOG/autoclawpi/internal/store"
+	"github.com/MisthiosOG/autoclawpi/internal/web"
 )
 
 var version = "dev"
@@ -29,7 +29,6 @@ const usage = `autoclawpi — OpenAI-compatible proxy untuk AutoClaw (Z.ai)
 
 Pemakaian:
   autoclawpi serve                 jalankan server OpenAI-compatible (default :8787)
-  autoclawpi login                 coba login OAuth via browser (butuh captcha solve)
   autoclawpi import                import token manual (stdin: access [refresh])
   autoclawpi refresh               perbarui access token via refresh token
   autoclawpi status                tampilkan status login (token disensor)
@@ -58,8 +57,6 @@ func main() {
 	switch os.Args[1] {
 	case "serve":
 		err = cmdServe(os.Args[2:])
-	case "login":
-		err = cmdLogin(os.Args[2:])
 	case "import":
 		err = cmdImport(os.Args[2:])
 	case "refresh":
@@ -113,7 +110,7 @@ func cmdServe(args []string) error {
 	}
 
 	// Main handler: OpenAI API
-	apiSrv := server.New(cl).WithAPIKey(cfg.APIKey)
+	apiSrv := server.New(cl).WithAPIKey(cfg.APIKey).WithWebPassword(*webPwd)
 	if cfg.RateLimitPerSec > 0 || cfg.RateLimitBurst > 0 {
 		apiSrv.WithRateLimit(cfg.RateLimitPerSec, cfg.RateLimitBurst)
 	}
@@ -128,6 +125,11 @@ func cmdServe(args []string) error {
 		webOpts = append(webOpts, web.WithAPIKey(cfg.APIKey))
 	}
 	webHandler := web.New(cl, webOpts...)
+
+	// Password panel dinamis: ganti password dari Settings langsung ngefek
+	// ke auth cookie API (Playground), tanpa restart.
+	apiSrv.WithWebPasswordFunc(webHandler.CurrentPassword)
+	apiSrv.WithWebSessionFunc(webHandler.CurrentSessionToken)
 
 	// Merge: web panel di path /, API di /v1/ dan /healthz
 	mux := http.NewServeMux()
@@ -144,6 +146,41 @@ func cmdServe(args []string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Auto-prune log: hapus log > 30 hari, tiap 1 jam.
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if n := db.PruneLogs(30); n > 0 {
+					fmt.Printf("[autoclawpi] prune %d log lama (>30 hari)\n", n)
+				}
+			}
+		}
+	}()
+
+	// Auto check-in harian jam 08:00 lokal (idempoten — task yang sudah
+	// di-claim hari ini otomatis dilewati).
+	go func() {
+		for {
+			now := time.Now()
+			next := time.Date(now.Year(), now.Month(), now.Day(), 8, 0, 0, 0, now.Location())
+			if now.After(next) {
+				next = next.Add(24 * time.Hour)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(next.Sub(now)):
+				fmt.Printf("[autoclawpi] auto check-in %s mulai...\n", next.Format("2006-01-02"))
+				_ = cmdCheckin([]string{})
+			}
+		}
+	}()
 
 	go func() {
 		<-ctx.Done()
@@ -166,27 +203,6 @@ func cmdServe(args []string) error {
 		return err
 	}
 	return nil
-}
-
-func finishLogin(ctx context.Context, cl *client.Client, vendor, code, state, navigateURI string) error {
-	out, err := cl.Login(ctx, vendor, code, state, navigateURI)
-	if err != nil {
-		return err
-	}
-	if out.Code != 0 || out.Data == nil || out.Data.AccessToken == "" {
-		return fmt.Errorf("login gagal code=%d msg=%s", out.Code, out.Msg)
-	}
-	c := &store.Creds{
-		AccessToken:  out.Data.AccessToken,
-		RefreshToken: out.Data.RefreshToken,
-		Provider:     vendor,
-		SavedAt:      time.Now().Format(time.RFC3339),
-	}
-	if err := store.Save(c); err != nil {
-		return err
-	}
-	fmt.Println("login sukses — kredensial tersimpan terenkripsi.")
-	return cmdStatus()
 }
 
 func cmdImport(args []string) error {

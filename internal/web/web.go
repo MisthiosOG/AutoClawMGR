@@ -2,21 +2,26 @@ package web
 
 import (
 	"context"
+	"crypto/rand"
 	"embed"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
-	"log"
 	"net"
+	neturl "net/url"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/hirotomasato/autoclawpi/internal/client"
-	"github.com/hirotomasato/autoclawpi/internal/db"
-	"github.com/hirotomasato/autoclawpi/internal/sign"
+	"github.com/MisthiosOG/autoclawpi/internal/client"
+	"github.com/MisthiosOG/autoclawpi/internal/config"
+	"github.com/MisthiosOG/autoclawpi/internal/db"
+	"github.com/MisthiosOG/autoclawpi/internal/sign"
 )
 
 //go:embed templates/*.html
@@ -24,12 +29,101 @@ var templateFS embed.FS
 
 // Server adalah web panel server.
 type Server struct {
-	mux      *http.ServeMux
-	tmpl     *template.Template
-	password string
-	apiKey   string
-	strategy string
-	cl       *client.Client
+	mux        *http.ServeMux
+	tmpl       *template.Template
+	password   string
+	apiKey     string
+	strategy   string
+	ratePerSec string
+	rateBurst  string
+	cl         *client.Client
+
+	// OAuth login dari web (lihat oauth.go)
+	oauthMu      sync.Mutex
+	oauthLn      net.Listener
+	oauthPort    int
+	oauthPending *oauthPending
+
+	// Session panel: cookie berisi token acak, bukan password.
+	sessMu   sync.Mutex
+	sessTok  string
+	sessExp  time.Time
+	loginFai map[string]loginFail
+}
+
+type loginFail struct {
+	count int
+	until time.Time // lockout sampai
+}
+
+// newSessionToken buat token sesi acak 32 byte (hex) — berlaku 30 hari.
+func newSessionToken() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%x", time.Now().UnixNano()) // fallback jarang terjadi
+	}
+	return hex.EncodeToString(b)
+}
+
+func (s *Server) setSession(tok string) {
+	s.sessMu.Lock()
+	s.sessTok = tok
+	s.sessExp = time.Now().Add(30 * 24 * time.Hour)
+	s.sessMu.Unlock()
+}
+
+func (s *Server) checkSession(tok string) bool {
+	s.sessMu.Lock()
+	defer s.sessMu.Unlock()
+	return s.sessTok != "" && tok == s.sessTok && time.Now().Before(s.sessExp)
+}
+
+// CurrentSessionToken dipakai internal/server untuk validasi cookie
+// panel_session di endpoint /v1 (Playground tanpa API key).
+func (s *Server) CurrentSessionToken() string {
+	s.sessMu.Lock()
+	defer s.sessMu.Unlock()
+	if time.Now().After(s.sessExp) {
+		return ""
+	}
+	return s.sessTok
+}
+
+// loginThrottled: 5 password salah per IP → lockout 10 menit.
+func (s *Server) loginThrottled(ip string) (bool, int) {
+	s.sessMu.Lock()
+	defer s.sessMu.Unlock()
+	f, ok := s.loginFai[ip]
+	if !ok {
+		return false, 0
+	}
+	if f.until.IsZero() || time.Now().After(f.until) {
+		if f.count >= 5 { // window 10 menit lewat — reset
+			delete(s.loginFai, ip)
+		}
+		return false, 0
+	}
+	if f.count >= 5 {
+		return true, int(time.Until(f.until).Minutes()) + 1
+	}
+	return false, 0
+}
+
+func (s *Server) recordLoginFail(ip string) {
+	s.sessMu.Lock()
+	defer s.sessMu.Unlock()
+	if s.loginFai == nil {
+		s.loginFai = make(map[string]loginFail)
+	}
+	f := s.loginFai[ip]
+	if time.Now().After(f.until) {
+		f.count = 0
+	}
+	f.count++
+	if f.count >= 5 {
+		f.until = time.Now().Add(10 * time.Minute)
+	}
+	s.loginFai[ip] = f
 }
 
 // Option untuk konfigurasi web panel.
@@ -58,32 +152,45 @@ func New(cl *client.Client, opts ...Option) *Server {
 
 	tmpl := template.New("").Funcs(template.FuncMap{
 		"pageTitle": pageTitle,
+		"stringsHasPrefix": strings.HasPrefix,
 	})
 	tmpl = template.Must(tmpl.ParseFS(templateFS, "templates/*.html"))
 	s.tmpl = tmpl
 
 	// Routes
 	s.mux.HandleFunc("/", s.authMiddleware(s.handleDashboard))
+	s.mux.HandleFunc("/api/live-stats", s.authMiddleware(s.handleLiveStats))
 	s.mux.HandleFunc("/accounts", s.authMiddleware(s.handleAccounts))
 	s.mux.HandleFunc("/accounts/", s.authMiddleware(s.handleAccounts))
-	s.mux.HandleFunc("/accounts/login", s.authMiddleware(s.handleAccountsLogin))
-	s.mux.HandleFunc("/accounts/login/start", s.authMiddleware(s.handleAccountsLoginStart))
-	s.mux.HandleFunc("/accounts/login/captcha-result", s.authMiddleware(s.handleAccountsLoginCaptcha))
+	s.mux.HandleFunc("/accounts/login", s.authMiddleware(s.handleOAuthLogin))
+	s.mux.HandleFunc("/accounts/login/verify", s.authMiddleware(s.handleOAuthVerify))
+	s.mux.HandleFunc("/accounts/login/proxy", s.authMiddleware(s.handleOAuthLoginProxy))
+	s.mux.HandleFunc("/auth/callback-zai", s.handleOAuthCallback)
 	s.mux.HandleFunc("/accounts/import", s.authMiddleware(s.handleAccountsImport))
+	s.mux.HandleFunc("/accounts/import-from-app", s.authMiddleware(s.handleImportFromApp))
 	s.mux.HandleFunc("/accounts/claim", s.authMiddleware(s.handleClaim100M))
 	s.mux.HandleFunc("/checkin", s.authMiddleware(s.handleCheckin))
 	s.mux.HandleFunc("/checkin/run", s.authMiddleware(s.handleCheckinRun))
 	s.mux.HandleFunc("/settings", s.authMiddleware(s.handleSettings))
 	s.mux.HandleFunc("/settings/password", s.authMiddleware(s.handleSettingsPassword))
 	s.mux.HandleFunc("/settings/strategy", s.authMiddleware(s.handleSettingsStrategy))
-	s.mux.HandleFunc("/settings/apikey", s.authMiddleware(s.handleSettingsAPIKey))
-	s.mux.HandleFunc("/settings/apikey/delete", s.authMiddleware(s.handleSettingsAPIKeyDelete))
+	s.mux.HandleFunc("/settings/ratelimit", s.authMiddleware(s.handleSettingsRateLimit))
+	s.mux.HandleFunc("/proxies", s.authMiddleware(s.handleProxies))
+	s.mux.HandleFunc("/proxies/add", s.authMiddleware(s.handleProxyAdd))
+	s.mux.HandleFunc("/proxies/batch", s.authMiddleware(s.handleProxyBatch))
+	s.mux.HandleFunc("/proxies/delete", s.authMiddleware(s.handleProxyDelete))
+	s.mux.HandleFunc("/proxies/toggle", s.authMiddleware(s.handleProxyToggle))
+	s.mux.HandleFunc("/proxies/test", s.authMiddleware(s.handleProxyTest))
+	s.mux.HandleFunc("/accounts/set-proxy", s.authMiddleware(s.handleAccountSetProxy))
+	s.mux.HandleFunc("/apikeys", s.authMiddleware(s.handleAPIKeys))
+	s.mux.HandleFunc("/apikeys/add", s.authMiddleware(s.handleAPIKeyAdd))
+	s.mux.HandleFunc("/apikeys/delete", s.authMiddleware(s.handleAPIKeyDelete))
 	s.mux.HandleFunc("/docs", s.authMiddleware(s.handleDocs))
 	s.mux.HandleFunc("/health", s.authMiddleware(s.handleHealth))
 	s.mux.HandleFunc("/health/run", s.authMiddleware(s.handleHealthRun))
 	s.mux.HandleFunc("/logs", s.authMiddleware(s.handleLogs))
-	s.mux.HandleFunc("/auth/callback-zai", s.handleOAuthCallback)
-	s.mux.HandleFunc("/auth/callback-google", s.handleOAuthCallback)
+	s.mux.HandleFunc("/models", s.authMiddleware(s.handleModels))
+	s.mux.HandleFunc("/playground", s.authMiddleware(s.handlePlayground))
 	s.mux.HandleFunc("/login", s.handleLogin)
 	s.mux.HandleFunc("/logout", s.handleLogout)
 
@@ -98,7 +205,7 @@ func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.password != "" {
 			cookie, err := r.Cookie("panel_auth")
-			if err != nil || cookie.Value != s.password {
+			if err != nil || !s.checkSession(cookie.Value) {
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			}
@@ -119,7 +226,10 @@ func (s *Server) renderTemplate(w http.ResponseWriter, page string, currentPage 
 			}
 		}
 	}
-	tmpl := template.Must(template.Must(template.New("").Funcs(template.FuncMap{"pageTitle": pageTitle}).Parse(s.tmplStr("base.html"))).Parse(s.tmplStr(page)))
+	tmpl := template.Must(template.Must(template.New("").Funcs(template.FuncMap{
+		"pageTitle":        pageTitle,
+		"stringsHasPrefix": strings.HasPrefix,
+	}).Parse(s.tmplStr("base.html"))).Parse(s.tmplStr(page)))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	err := tmpl.ExecuteTemplate(w, "base", d)
 	if err != nil {
@@ -145,6 +255,10 @@ func pageTitle(page string) string {
 		return "Check-In — autoclawpi"
 	case "settings":
 		return "Settings — autoclawpi"
+	case "apikeys":
+		return "API Keys — autoclawpi"
+	case "proxies":
+		return "Proxy Pools — autoclawpi"
 	case "login":
 		return "Login — autoclawpi"
 	case "docs":
@@ -182,17 +296,31 @@ func (s *Server) renderString(name string, data any) (string, error) {
 // ── Handlers ────────────────────────────────────────────────────────
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	ip := strings.SplitN(r.RemoteAddr, ":", 2)[0]
 	if r.Method == "POST" {
+		if locked, mins := s.loginThrottled(ip); locked {
+			renderStandalone(w, "panel-login.html", map[string]any{
+				"Error": fmt.Sprintf("Terlalu banyak percobaan gagal — coba lagi %d menit", mins),
+			})
+			return
+		}
 		pwd := r.FormValue("password")
 		if pwd == s.password {
+			tok := newSessionToken()
+			s.setSession(tok)
 			http.SetCookie(w, &http.Cookie{
-				Name: "panel_auth", Value: pwd,
+				Name: "panel_auth", Value: tok,
 				Path: "/", MaxAge: 86400 * 30,
 				HttpOnly: true, SameSite: http.SameSiteLaxMode,
 			})
+			// window 10 menit buat IP yang barusan sukses
+			s.sessMu.Lock()
+			delete(s.loginFai, ip)
+			s.sessMu.Unlock()
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
+		s.recordLoginFail(ip)
 		renderStandalone(w, "panel-login.html", map[string]any{"Error": "Wrong password"})
 		return
 	}
@@ -200,8 +328,19 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	s.setSession("") // hapus sesi server-side
 	http.SetCookie(w, &http.Cookie{Name: "panel_auth", Value: "", Path: "/", MaxAge: -1})
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// handleLiveStats data JSON buat live counter dashboard (poll tiap 2s).
+func (s *Server) handleLiveStats(w http.ResponseWriter, _ *http.Request) {
+	totalReq, totalTokens, _ := db.LogStatsAllTotal()
+	writeJSON(w, 200, map[string]any{
+		"tokens":        totalTokens,
+		"requests":      totalReq,
+		"tokens_per_min": db.LogTokensLastMinute(),
+	})
 }
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -247,6 +386,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"TotalReq":       totalReq,
 		"TotalTokens":    totalTokens,
 		"TotalCost":      totalCost,
+		"LatencyMs":      db.LogAvgLatencyMs(),
 	})
 }
 
@@ -381,10 +521,30 @@ func (s *Server) handleAccountDetail(w http.ResponseWriter, r *http.Request, id 
 		_ = db.UpdateAccount(a)
 	}
 
+	proxies, _ := db.ListProxies()
+	curProxyID, curProxyName := db.AccountProxyName(id)
+
+	type infoRow struct {
+		Key   string
+		Value string
+	}
+	infoRows := []infoRow{
+		{"ID", fmt.Sprintf("%d", a.ID)},
+		{"Name", a.Name},
+		{"Provider", a.Provider},
+		{"User ID", a.UserID},
+		{"Device ID", a.DeviceID},
+		{"Created", strings.Split(a.CreatedAt, "T")[0]},
+	}
+
 	s.renderTemplate(w, "account.html", "accounts", map[string]any{
 		"Account":        a,
 		"Balance":        balance,
 		"CheckinHistory": history,
+		"InfoRows":       infoRows,
+		"Proxies":        proxies,
+		"ProxyID":        curProxyID,
+		"ProxyName":      curProxyName,
 	})
 }
 
@@ -430,155 +590,9 @@ func refreshBalance(id int64) int {
 	return a.Points
 }
 
-func (s *Server) handleAccountsLogin(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/accounts/login" {
-		http.NotFound(w, r)
-		return
-	}
-	s.renderTemplate(w, "login.html", "login", map[string]any{"Flow": "start"})
-}
-
-func (s *Server) handleAccountsLoginStart(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	capCfg, err := s.cl.CaptchaConfig(ctx)
-	prefix := "sq51tr"
-	sceneID := "18vhnjxl"
-	if err == nil && capCfg != nil && capCfg.Data != nil {
-		prefix = capCfg.Data.Prefix
-		sceneID = capCfg.Data.SceneID
-	}
-	s.renderTemplate(w, "login.html", "login", map[string]any{
-		"Flow":    "captcha",
-		"Prefix":  prefix,
-		"SceneID": sceneID,
-		"LoginURL": "/accounts/login/captcha-result",
-	})
-}
-
-func (s *Server) handleAccountsLoginCaptcha(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		VerifyParam string `json:"verifyParam"`
-		Provider    string `json:"provider"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		json.NewEncoder(w).Encode(map[string]any{"ok": false, "msg": "bad request"})
-		return
-	}
-	if req.VerifyParam == "" {
-		json.NewEncoder(w).Encode(map[string]any{"ok": false, "msg": "missing verifyParam"})
-		return
-	}
-
-	// Use a registered port for OAuth callback
-	callbackPort := 0
-	var listener net.Listener
-	registeredPorts := []int{18432, 19654, 19723, 53699}
-	for _, p := range registeredPorts {
-		if p == 8787 {
-			continue
-		}
-		ln, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", p))
-		if err == nil {
-			listener = ln
-			callbackPort = p
-			break
-		}
-	}
-	if listener == nil {
-		// Fallback
-		var err error
-		listener, err = net.Listen("tcp", "localhost:18432")
-		if err != nil {
-			json.NewEncoder(w).Encode(map[string]any{"ok": false, "msg": "no port available"})
-			return
-		}
-		callbackPort = 18432
-	}
-
-	// Start temporary callback server on the listener
-	callbackMux := http.NewServeMux()
-	webPanelURL := fmt.Sprintf("http://localhost:%d", 8787) // known port
-	callbackMux.HandleFunc("/auth/callback-zai", func(w2 http.ResponseWriter, r2 *http.Request) {
-		handleOAuthCallbackRedirect(w2, r2, s.cl, webPanelURL+"/accounts")
-	})
-	callbackServer := &http.Server{Handler: callbackMux}
-	go func() {
-		if err := callbackServer.Serve(listener); err != nil && err != http.ErrServerClosed {
-			log.Printf("[autoclawpi] callback server error: %v", err)
-		}
-	}()
-	time.AfterFunc(5*time.Minute, func() { callbackServer.Close() })
-
-	navigateURI := fmt.Sprintf("http://localhost:%d/auth/callback-zai", callbackPort)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	oauthURL, _, err := s.cl.OAuthURL(ctx, "zai", navigateURI, "autoclaw", map[string]any{
-		"ali_captcha_verify_param": req.VerifyParam,
-	})
-	if err != nil {
-		json.NewEncoder(w).Encode(map[string]any{"ok": false, "msg": err.Error()})
-		return
-	}
-
-	json.NewEncoder(w).Encode(map[string]any{"ok": true, "url": oauthURL})
-}
-
-func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
-	code := r.URL.Query().Get("code")
-	state := r.URL.Query().Get("state")
-	if code == "" {
-		http.Error(w, "missing code", 400)
-		return
-	}
-
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	navigateURI := fmt.Sprintf("%s://%s%s", scheme, r.Host, r.URL.Path)
-
-	vendor := "zai"
-	if strings.Contains(r.URL.Path, "google") {
-		vendor = "google"
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	out, err := s.cl.Login(ctx, vendor, code, state, navigateURI)
-	if err != nil {
-		http.Error(w, "Login failed: "+err.Error(), 500)
-		return
-	}
-	if out.Code != 0 || out.Data == nil || out.Data.AccessToken == "" {
-		http.Error(w, fmt.Sprintf("Login failed: code=%d msg=%s", out.Code, out.Msg), 500)
-		return
-	}
-
-	deviceID := "web-oauth-" + fmt.Sprintf("%x", time.Now().UnixNano())
-	userID := ""
-	if out.Data.UserID != nil {
-		userID = fmt.Sprint(out.Data.UserID)
-	}
-	acctID, err := db.AddAccount(out.Data.UserName, out.Data.AccessToken, out.Data.RefreshToken, vendor, userID, out.Data.UserName, deviceID)
-	if err != nil {
-		http.Error(w, "Save failed: "+err.Error(), 500)
-		return
-	}
-
-	// Auto-fetch balance (synchronous)
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 15*time.Second)
-	points := fetchBalance(ctx2, out.Data.AccessToken, s.cl)
-	cancel2()
-	if points > 0 {
-		_ = db.UpdatePoints(acctID, points)
-	}
-
-	// Redirect back to web panel
-	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+// handleAccountsImportPage renders the import page (GET). Alias of handleAccountsImport GET branch.
+func (s *Server) handleAccountsImportPage(w http.ResponseWriter, r *http.Request) {
+	s.renderTemplate(w, "import.html", "accounts", nil)
 }
 
 func (s *Server) handleAccountsImport(w http.ResponseWriter, r *http.Request) {
@@ -663,11 +677,33 @@ func (s *Server) doClaim100M(w http.ResponseWriter, r *http.Request, a *db.Accou
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `<div style="padding:14px;border-radius:10px;background:rgba(5,150,105,0.12);border:1px solid rgba(52,211,153,0.25)">
-  <div style="font-size:14px;font-weight:700;color:#34d399;margin-bottom:6px"><i class="fas fa-gift"></i> 100M Token Claimed!</div>
-  <div style="font-size:12px;color:#a7f3d0;font-family:mono;word-break:break-all;margin-bottom:8px">%s</div>
-  <div style="font-size:13px;color:#e2e8f0">Balance: <span style="color:#fbbf24;font-weight:700">%d pts</span></div>
-</div>`, template.HTMLEscapeString(token), points)
+	fmt.Fprintf(w, `<div style="margin-top:14px;background:#111116;border:1px solid #1c1c22;border-radius:14px;padding:16px;text-align:left">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="status-dot online" style="display:inline-block"></span>
+    <span style="font-size:13px;font-weight:600;color:#e7e7ec">100M Token Claimed</span>
+  </div>
+  <div style="position:relative">
+    <input type="text" readonly value="%s" id="claim-token" style="background:#08080a;border:1px solid #1c1c22;border-radius:10px;padding:10px 40px 10px 12px;color:#9a9aa6;font-family:mono;font-size:12px;width:100%%;text-overflow:ellipsis" />
+    <button type="button" onclick="copyClaimToken()" style="position:absolute;right:6px;top:50%%;transform:translateY(-50%%);background:#18181e;border:1px solid #2a2a34;border-radius:8px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#c9c9d1;transition:background .15s" onmouseover="this.style.background='#1f1f26'" onmouseout="this.style.background='#18181e'">
+      <svg id="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    </button>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px">
+    <span style="font-size:12px;color:#6b6b76">Balance</span>
+    <span style="font-size:16px;font-weight:600;color:#f5f5f7">%d pts</span>
+  </div>
+</div>
+<script>
+function copyClaimToken(){
+  var el=document.getElementById('claim-token');
+  el.select();el.setSelectionRange(0,99999);
+  navigator.clipboard.writeText(el.value).then(function(){
+    var ic=document.getElementById('copy-icon');
+    ic.outerHTML='<svg id="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    setTimeout(function(){var n=document.getElementById('copy-icon');if(n)n.outerHTML='<svg id="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';},1500);
+  });
+}
+</script>`, template.HTMLEscapeString(token), points)
 }
 
 func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
@@ -737,6 +773,13 @@ func (s *Server) handleCheckinRun(w http.ResponseWriter, r *http.Request) {
 		}
 		results = append(results, ar)
 	}
+	// HTMX request: balikin fragment #checkin-results aja (jangan seluruh halaman).
+	if r.Header.Get("HX-Request") == "true" {
+		if err := s.tmpl.ExecuteTemplate(w, "checkin-results", map[string]any{"Results": results}); err != nil {
+			http.Error(w, err.Error(), 500)
+		}
+		return
+	}
 	s.renderTemplate(w, "checkin.html", "checkin", map[string]any{
 		"Results": results,
 	})
@@ -751,8 +794,30 @@ func ifEmpty(s, fallback string) string {
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	apikey, _ := db.GetConfig("api_key")
-	apiKeys := loadAPIKeys()
 	accounts, _ := db.ListAccounts()
+	// Nilai rate limiter utk form (default kalau belum pernah disimpan)
+	ratePerSec := s.ratePerSec
+	burst := s.rateBurst
+	if ratePerSec == "" || burst == "" {
+		if cfg, err := config.Load(); err == nil {
+			if ratePerSec == "" {
+				if cfg.RateLimitPerSec > 0 {
+					ratePerSec = strconv.FormatFloat(cfg.RateLimitPerSec, 'f', -1, 64)
+				} else {
+					ratePerSec = "0.667"
+				}
+			}
+			if burst == "" {
+				if cfg.RateLimitBurst > 0 {
+					burst = strconv.Itoa(cfg.RateLimitBurst)
+				} else {
+					burst = "3"
+				}
+			}
+		}
+	}
+	s.ratePerSec = ratePerSec
+	s.rateBurst = burst
 	// Fetch models with API key
 	models := []string{}
 	modelsReq, _ := http.NewRequest("GET", "http://"+r.Host+"/v1/models", nil)
@@ -779,8 +844,299 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		"TotalAccounts": len(accounts),
 		"Models":        models,
 		"APIKey":        apikey,
-		"APIKeys":       apiKeys,
+		"RatePerSec":    s.ratePerSec,
+		"RateBurst":     s.rateBurst,
 	})
+}
+
+// CurrentPassword mengembalikan password panel aktif (utk auth API via cookie).
+func (s *Server) CurrentPassword() string { return s.password }
+
+// handleOAuthLoginProxy: set/batal proxy untuk sesi login aktif (dipanggil via fetch).
+func (s *Server) handleOAuthLoginProxy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"ok": false, "msg": "POST only"})
+		return
+	}
+	pid, _ := strconv.ParseInt(r.FormValue("proxy_id"), 10, 64)
+	var name string
+	s.oauthMu.Lock()
+	if pend := s.oauthPending; pend != nil {
+		if pid > 0 {
+			if pp, err := db.GetProxy(pid); err == nil && pp.Active {
+				pend.loginProxyURL = pp.URL
+				name = pp.Name
+			}
+		} else {
+			pend.loginProxyURL = ""
+		}
+	}
+	s.oauthMu.Unlock()
+	writeJSON(w, 200, map[string]any{"ok": true, "proxy": name})
+}
+
+// handleProxies menampilkan tab Proxy Pool.
+func (s *Server) handleProxies(w http.ResponseWriter, _ *http.Request) {
+	proxies, _ := db.ListProxies()
+	s.renderTemplate(w, "proxies.html", "proxies", map[string]any{"Proxies": proxies})
+}
+
+func (s *Server) handleProxyAdd(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Redirect(w, r, "/proxies", http.StatusSeeOther)
+		return
+	}
+	// Format mudah: ip | port | user | pass (name otomatis = ip)
+	ip := strings.TrimSpace(r.FormValue("ip"))
+	port := strings.TrimSpace(r.FormValue("port"))
+	user := strings.TrimSpace(r.FormValue("user"))
+	pass := r.FormValue("pass")
+	name := strings.TrimSpace(r.FormValue("name"))
+
+	if name == "" && ip != "" && port != "" {
+		name = ip
+	}
+	var url string
+	switch {
+	case ip != "" && port != "" && user != "":
+		url = fmt.Sprintf("http://%s:%s@%s:%s", neturl.QueryEscape(user), neturl.QueryEscape(pass), ip, port)
+	case ip != "" && port != "":
+		url = fmt.Sprintf("http://%s:%s", ip, port)
+	default:
+		// fallback format lama (name+url)
+		name = strings.TrimSpace(r.FormValue("name"))
+		url = strings.TrimSpace(r.FormValue("url"))
+	}
+	if name == "" || url == "" {
+		w.Write([]byte(`<span style="color:#e08585">IP dan Port wajib diisi</span>`))
+		return
+	}
+	if _, err := db.AddProxy(name, url); err != nil {
+		w.Write([]byte(`<span style="color:#e08585">` + template.HTMLEscapeString(err.Error()) + `</span>`))
+		return
+	}
+	w.Write([]byte(`<span style="color:var(--ok)">Proxy "` + template.HTMLEscapeString(name) + `" added</span>`))
+}
+
+// handleProxyBatch: import banyak proxy sekaligus dari textarea.
+// Format per baris (auto-deteksi): ip:port:user:pass | ip:port | scheme://user:pass@host:port
+func (s *Server) handleProxyBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Redirect(w, r, "/proxies", http.StatusSeeOther)
+		return
+	}
+	raw := r.FormValue("proxies")
+	raw = strings.ReplaceAll(raw, "\r\n", "\n")
+	lines := strings.Split(raw, "\n")
+	added, skipped := 0, 0
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// buang prefix log macam "[+]  1.2.3.4:3129:u:p  OK 1073ms (1.2.3.4)"
+		line = strings.TrimPrefix(line, "[+]")
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "[-]") {
+			continue
+		}
+		// ambil token pertama yang mengandung ":" (buang status/latency di belakang)
+		if idx := strings.IndexAny(line, " 	"); idx > 0 {
+			line = line[:idx]
+		}
+		url := normalizeProxyLine(line)
+		if url == "" {
+			skipped++
+			continue
+		}
+		// dedup: skip kalau URL sudah ada
+		dup := false
+		if existing, _ := db.ListProxies(); existing != nil {
+			for _, p := range existing {
+				if p.URL == url {
+					dup = true
+					break
+				}
+			}
+		}
+		if dup {
+			skipped++
+			continue
+		}
+		name := fmt.Sprintf("proxy-%d", added+1)
+		if u, err := neturl.Parse(url); err == nil && u.Host != "" {
+			name = strings.Split(u.Host, ":")[0]
+		}
+		if _, err := db.AddProxy(name, url); err == nil {
+			added++
+		} else {
+			skipped++
+		}
+	}
+	msg := fmt.Sprintf(`<span style="color:var(--ok)">Import %d proxy</span>`, added)
+	if skipped > 0 {
+		msg += fmt.Sprintf(` <span style="color:var(--faint)">(%d dilewati: duplikat/format salah)</span>`, skipped)
+	}
+	w.Write([]byte(msg))
+}
+
+// normalizeProxyLine: "ip:port:user:pass" → "http://user:pass@ip:port";
+// "ip:port" → "http://ip:port"; URL lengkap → apa adanya. "" = format salah.
+func normalizeProxyLine(line string) string {
+	parts := strings.Split(line, ":")
+	switch {
+	case len(parts) >= 4 && !strings.Contains(line, "://"):
+		// ip:port:user:pass (user/pass bisa mengandung ":" → gabung sisanya)
+		ip, port := parts[0], parts[1]
+		user := parts[2]
+		pass := strings.Join(parts[3:], ":")
+		if ip == "" || port == "" || user == "" {
+			return ""
+		}
+		return fmt.Sprintf("http://%s:%s@%s:%s", neturl.QueryEscape(user), neturl.QueryEscape(pass), ip, port)
+	case len(parts) == 2 && !strings.Contains(line, "://"):
+		if parts[0] == "" || parts[1] == "" {
+			return ""
+		}
+		return fmt.Sprintf("http://%s:%s", parts[0], parts[1])
+	case strings.Contains(line, "://"):
+		return line
+	default:
+		return ""
+	}
+}
+
+func (s *Server) handleProxyDelete(w http.ResponseWriter, r *http.Request) {
+	if id, err := strconv.ParseInt(r.FormValue("id"), 10, 64); err == nil {
+		_ = db.DeleteProxy(id)
+	}
+	http.Redirect(w, r, "/proxies", http.StatusSeeOther)
+}
+
+func (s *Server) handleProxyToggle(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(r.FormValue("id"), 10, 64)
+	active := r.FormValue("active") == "1"
+	_ = db.SetProxyActive(id, active)
+	http.Redirect(w, r, "/proxies", http.StatusSeeOther)
+}
+
+// handleProxyTest: cek koneksi keluar via proxy (GET ke IP echo service).
+func (s *Server) handleProxyTest(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(r.FormValue("id"), 10, 64)
+	p, err := db.GetProxy(id)
+	if err != nil || p == nil {
+		w.Write([]byte(`<span style="color:#e08585">not found</span>`))
+		return
+	}
+	pu, perr := neturl.Parse(p.URL)
+	status := "bad URL"
+	if perr == nil && pu.Host != "" {
+		tr := &http.Transport{Proxy: http.ProxyURL(pu), TLSHandshakeTimeout: 10 * time.Second}
+		cl := &http.Client{Transport: tr, Timeout: 15 * time.Second}
+		resp, rerr := cl.Get("https://api.ipify.org?format=json")
+		if rerr != nil {
+			status = "failed: " + rerr.Error()
+		} else {
+			b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+			resp.Body.Close()
+			var out struct {
+				IP string `json:"ip"`
+			}
+			if json.Unmarshal(b, &out) == nil && out.IP != "" {
+				status = "OK · IP " + out.IP
+			} else {
+				status = "unexpected response"
+			}
+		}
+	}
+	_ = db.UpdateProxyTest(p.ID, status)
+	w.Write([]byte(template.HTMLEscapeString(status)))
+}
+
+// handleAccountSetProxy: bind/unbind proxy ke akun (dari dropdown detail akun).
+func (s *Server) handleAccountSetProxy(w http.ResponseWriter, r *http.Request) {
+	accID, _ := strconv.ParseInt(r.FormValue("account_id"), 10, 64)
+	proxyID, _ := strconv.ParseInt(r.FormValue("proxy_id"), 10, 64)
+	if accID > 0 {
+		_ = db.SetAccountProxy(accID, proxyID)
+	}
+	http.Redirect(w, r, fmt.Sprintf("/accounts/%d", accID), http.StatusSeeOther)
+}
+
+// handleAPIKeys menampilkan tab API Keys (kelola + generate).
+func (s *Server) handleAPIKeys(w http.ResponseWriter, r *http.Request) {
+	keys := loadAPIKeys()
+	baseURL := requestBaseURL(r) + "/v1"
+	s.renderTemplate(w, "apikeys.html", "apikeys", map[string]any{
+		"APIKeys": keys,
+		"BaseURL": baseURL,
+	})
+}
+
+// handleAPIKeyAdd menambah key baru dari tab API Keys.
+func (s *Server) handleAPIKeyAdd(w http.ResponseWriter, r *http.Request) {
+	name := r.FormValue("name")
+	key := r.FormValue("apikey")
+	if name == "" || key == "" {
+		w.Write([]byte(`<span style="color:#f87171">Name and key required</span>`))
+		return
+	}
+	for _, k := range loadAPIKeys() {
+		if k.Name == name {
+			w.Write([]byte(`<span style="color:#f87171">Name "`+name+`" already exists</span>`))
+			return
+		}
+		if k.Key == key {
+			w.Write([]byte(`<span style="color:#f87171">This key already exists</span>`))
+			return
+		}
+	}
+	keys := loadAPIKeys()
+	keys = append(keys, apiKeyEntry{Name: name, Key: key})
+	saveAPIKeys(keys)
+	w.Write([]byte(`<span style="color:#34d399">API key "` + name + `" added</span>`))
+}
+
+// handleAPIKeyDelete menghapus key dari tab API Keys.
+func (s *Server) handleAPIKeyDelete(w http.ResponseWriter, r *http.Request) {
+	name := r.FormValue("name")
+	if name == "" {
+		w.Write([]byte(`<span style="color:#f87171">Name required</span>`))
+		return
+	}
+	keys := loadAPIKeys()
+	filtered := keys[:0]
+	for _, k := range keys {
+		if k.Name != name {
+			filtered = append(filtered, k)
+		}
+	}
+	saveAPIKeys(filtered)
+	w.Write([]byte(`<span style="color:#34d399">API key "` + name + `" deleted</span>`))
+}
+
+// handleSettingsRateLimit menyimpan pengaturan token bucket ke config.json.
+// Berlaku setelah restart service (rate limiter dibuat saat startup).
+func (s *Server) handleSettingsRateLimit(w http.ResponseWriter, r *http.Request) {
+	perSec := r.FormValue("rate_per_sec")
+	burst := r.FormValue("burst")
+	rate, err1 := strconv.ParseFloat(perSec, 64)
+	b, err2 := strconv.Atoi(burst)
+	if err1 != nil || err2 != nil || rate <= 0 || b < 1 {
+		w.Write([]byte(`<span style="color:#f87171">Invalid values (rate &gt; 0, burst &ge; 1)</span>`))
+		return
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		w.Write([]byte(`<span style="color:#f87171">Load config: ` + err.Error() + `</span>`))
+		return
+	}
+	cfg.RateLimitPerSec = rate
+	cfg.RateLimitBurst = b
+	if err := config.Save(cfg); err != nil {
+		w.Write([]byte(`<span style="color:#f87171">Save: ` + err.Error() + `</span>`))
+		return
+	}
+	s.ratePerSec = perSec
+	s.rateBurst = burst
+	w.Write([]byte(`<span style="color:#34d399">Rate limit saved — restart service to apply</span>`))
 }
 
 type apiKeyEntry struct {
@@ -806,12 +1162,15 @@ func saveAPIKeys(keys []apiKeyEntry) {
 func (s *Server) handleSettingsPassword(w http.ResponseWriter, r *http.Request) {
 	pwd := r.FormValue("password")
 	if pwd == "" {
-		w.Write([]byte(`<span style="color:#f87171">Password cannot be empty</span>`))
+		w.Write([]byte(`<span style="color:#e08585">Password cannot be empty</span>`))
 		return
 	}
 	s.password = pwd
-	http.SetCookie(w, &http.Cookie{Name: "panel_auth", Value: pwd, Path: "/", MaxAge: 86400 * 30, HttpOnly: true, SameSite: http.SameSiteLaxMode})
-	w.Write([]byte(`<span style="color:#34d399">Password updated</span>`))
+	// Rotasi sesi: token lama hangus, set cookie baru untuk sesi ini.
+	tok := newSessionToken()
+	s.setSession(tok)
+	http.SetCookie(w, &http.Cookie{Name: "panel_auth", Value: tok, Path: "/", MaxAge: 86400 * 30, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	w.Write([]byte(`<span style="color:var(--ok)">Password updated</span>`))
 }
 
 func (s *Server) handleSettingsStrategy(w http.ResponseWriter, r *http.Request) {
@@ -820,36 +1179,6 @@ func (s *Server) handleSettingsStrategy(w http.ResponseWriter, r *http.Request) 
 		s.strategy = strat
 	}
 	w.Write([]byte(`<span style="color:#34d399">Strategy updated</span>`))
-}
-
-func (s *Server) handleSettingsAPIKey(w http.ResponseWriter, r *http.Request) {
-	name := r.FormValue("name")
-	key := r.FormValue("apikey")
-	if name == "" || key == "" {
-		w.Write([]byte(`<span style="color:#f87171">Name and key required</span>`))
-		return
-	}
-	keys := loadAPIKeys()
-	keys = append(keys, apiKeyEntry{Name: name, Key: key})
-	saveAPIKeys(keys)
-	w.Write([]byte(`<span style="color:#34d399">API key added</span>`))
-}
-
-func (s *Server) handleSettingsAPIKeyDelete(w http.ResponseWriter, r *http.Request) {
-	name := r.FormValue("name")
-	if name == "" {
-		w.Write([]byte(`<span style="color:#f87171">Name required</span>`))
-		return
-	}
-	keys := loadAPIKeys()
-	filtered := keys[:0]
-	for _, k := range keys {
-		if k.Name != name {
-			filtered = append(filtered, k)
-		}
-	}
-	saveAPIKeys(filtered)
-	w.Write([]byte(`<span style="color:#34d399">API key deleted</span>`))
 }
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
@@ -863,9 +1192,105 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
+	// Daftar model tersedia (dari /v1/models)
+	available := fetchModels("http://"+r.Host+"/v1/models", s.apiKey)
+	// Statistik dari logs
+	stats, _ := db.ModelStats()
+
+	// Map statistik by model name; route ID di-log upstream (zai_auto, tdpsk_...)
+	// dinormalisasi balik ke friendly name biar gak dobel di tab.
+	routeToModel := make(map[string]string)
+	for _, m := range available {
+		routeToModel[client.RouteID(m)] = m
+	}
+	statMap := make(map[string]db.ModelStat)
+	for _, st := range stats {
+		if m, ok := routeToModel[st.Model]; ok {
+			st.Model = m
+		}
+		statMap[st.Model] = st
+	}
+
+	type modelView struct {
+		Model        string
+		Available    bool
+		Total        int
+		Success      int
+		Failed       int
+		TotalTokens  int
+		SuccessRate  float64
+	}
+
+	var online, offline []modelView
+	seen := make(map[string]bool)
+
+	// 1. Model tersedia (online)
+	for _, m := range available {
+		st := statMap[m]
+		v := modelView{
+			Model:       m,
+			Available:   true,
+			Total:       st.Total,
+			Success:     st.Success,
+			Failed:      st.Failed,
+			TotalTokens: st.TotalTokens,
+		}
+		if v.Total > 0 {
+			v.SuccessRate = float64(v.Success) / float64(v.Total) * 100
+		}
+		online = append(online, v)
+		seen[m] = true
+	}
+
+	// 2. Model yang pernah dipakai tapi gak di list (offline) — pakai stats
+	// yang udah dinormalisasi (statMap), biar route ID gak bocor ke sini.
+	for _, st := range statMap {
+		if !seen[st.Model] {
+			v := modelView{
+				Model:       st.Model,
+				Available:   false,
+				Total:       st.Total,
+				Success:     st.Success,
+				Failed:      st.Failed,
+				TotalTokens: st.TotalTokens,
+			}
+			if v.Total > 0 {
+				v.SuccessRate = float64(v.Success) / float64(v.Total) * 100
+			}
+			offline = append(offline, v)
+		}
+	}
+
+	s.renderTemplate(w, "models.html", "models", map[string]any{
+		"Online":  online,
+		"Offline": offline,
+	})
+}
+
+// requestBaseURL balikin scheme://host dari request, hormati proxy header.
+func requestBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	}
+	return scheme + "://" + r.Host
+}
+
 func (s *Server) handleDocs(w http.ResponseWriter, r *http.Request) {
 	models := fetchModels("http://"+r.Host+"/v1/models", s.apiKey)
-	s.renderTemplate(w, "docs.html", "docs", map[string]any{"Models": models})
+	s.renderTemplate(w, "docs.html", "docs", map[string]any{
+		"Models":  models,
+		"BaseURL": requestBaseURL(r),
+	})
+}
+
+func (s *Server) handlePlayground(w http.ResponseWriter, r *http.Request) {
+	models := fetchModels("http://"+r.Host+"/v1/models", s.apiKey)
+	s.renderTemplate(w, "playground.html", "playground", map[string]any{"Models": models})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -925,62 +1350,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
-}
-
-// handleOAuthCallbackRedirect handles the OAuth callback on the temporary port
-// and redirects back to the web panel.
-func handleOAuthCallbackRedirect(w http.ResponseWriter, r *http.Request, cl *client.Client, redirectURL string) {
-	code := r.URL.Query().Get("code")
-	state := r.URL.Query().Get("state")
-	if code == "" {
-		http.Error(w, "missing code", 400)
-		return
-	}
-
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	navigateURI := fmt.Sprintf("%s://%s%s", scheme, r.Host, r.URL.Path)
-
-	vendor := "zai"
-	if strings.Contains(r.URL.Path, "google") {
-		vendor = "google"
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	out, err := cl.Login(ctx, vendor, code, state, navigateURI)
-	if err != nil {
-		http.Error(w, "Login failed: "+err.Error(), 500)
-		return
-	}
-	if out.Code != 0 || out.Data == nil || out.Data.AccessToken == "" {
-		http.Error(w, fmt.Sprintf("Login failed: code=%d msg=%s", out.Code, out.Msg), 500)
-		return
-	}
-
-	deviceID := "web-oauth-" + fmt.Sprintf("%x", time.Now().UnixNano())
-	userID := ""
-	if out.Data.UserID != nil {
-		userID = fmt.Sprint(out.Data.UserID)
-	}
-	acctID, err := db.AddAccount(out.Data.UserName, out.Data.AccessToken, out.Data.RefreshToken, vendor, userID, out.Data.UserName, deviceID)
-	if err != nil {
-		http.Error(w, "Save failed: "+err.Error(), 500)
-		return
-	}
-
-	// Auto-fetch balance (synchronous)
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 15*time.Second)
-	points := fetchBalance(ctx2, out.Data.AccessToken, cl)
-	cancel2()
-	if points > 0 {
-		_ = db.UpdatePoints(acctID, points)
-	}
-
-	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
 
 // fetchBalance mengambil saldo points dari server.

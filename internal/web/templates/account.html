@@ -1,93 +1,109 @@
 {{define "content"}}
-<div style="margin-bottom:28px;display:flex;align-items:center;gap:14px">
-  <a href="/accounts" class="btn btn-ghost" style="padding:8px 12px;border-radius:10px"><i class="fas fa-arrow-left" style="font-size:14px"></i></a>
-  <div>
-    <h1 style="font-size:24px;font-weight:700;letter-spacing:-.02em">{{if .Account.Name}}{{.Account.Name}}{{else}}Account #{{.Account.ID}}{{end}}</h1>
-    <p style="color:#64748b;font-size:14px;margin-top:2px">Account details and management</p>
+<div style="max-width:1100px;margin:0 auto">
+  <div class="page-head">
+    <div style="display:flex;align-items:center;gap:14px">
+      <a href="/accounts" class="btn btn-ghost" style="padding:9px 12px" title="Kembali"><i class="fas fa-arrow-left"></i></a>
+      <div class="page-head-ic">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div>
+        <h1>{{if .Account.Name}}{{.Account.Name}}{{else}}Account #{{.Account.ID}}{{end}}</h1>
+        <div class="subtitle">Detail akun & management</div>
+      </div>
+    </div>
   </div>
-</div>
+  <div class="rule"></div>
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:900px">
-  <div class="glass glow" style="padding:22px">
-    <h3 style="font-size:15px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px;color:#f1f5f9">
-      <i class="fas fa-info-circle" style="color:#818cf8"></i> Account Info
-    </h3>
-    <div style="display:grid;gap:10px;font-size:13px">
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
-        <span style="color:#64748b">ID</span>
-        <span style="color:#e2e8f0;font-weight:500">{{.Account.ID}}</span>
+  <div style="display:grid;grid-template-columns:1.2fr 1.1fr 1fr;gap:14px">
+  <div class="card">
+    <div class="card-top">
+      <div class="label">Account Info</div>
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       </div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
-        <span style="color:#64748b">Name</span>
-        <span style="color:#e2e8f0;font-weight:500">{{if .Account.Name}}{{.Account.Name}}{{else}}<span style="color:#475569">—</span>{{end}}</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:1px;font-size:13px">
+      {{range .InfoRows}}
+      <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--hair)">
+        <span style="color:var(--faint)">{{.Key}}</span>
+        <span style="color:var(--ink);font-weight:500">{{.Value}}</span>
       </div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
-        <span style="color:#64748b">Provider</span>
-        <span style="color:#e2e8f0;font-weight:500">{{.Account.Provider}}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
-        <span style="color:#64748b">User ID</span>
-        <span style="color:#e2e8f0;font-weight:500">{{if .Account.UserID}}{{.Account.UserID}}{{else}}<span style="color:#475569">—</span>{{end}}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
-        <span style="color:#64748b">Device ID</span>
-        <span style="color:#e2e8f0;font-weight:500;font-size:11px;font-family:mono">{{.Account.DeviceID}}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
-        <span style="color:#64748b">Created</span>
-        <span style="color:#e2e8f0;font-weight:500">{{slice .Account.CreatedAt 0 10}}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0">
-        <span style="color:#64748b">Status</span>
-        <span class="badge {{if .Account.Active}}badge-success{{else}}badge-danger{{end}}" style="font-size:11px">
-          <i class="fas fa-circle" style="font-size:7px"></i>
+      {{end}}
+      <div style="display:flex;justify-content:space-between;padding:10px 0;align-items:center">
+        <span style="color:#6b6b76">Status</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;color:#e7e7ec;font-weight:500">
+          <span class="status-dot {{if .Account.Active}}online{{else}}offline{{end}}" style="display:inline-block"></span>
           {{if .Account.Active}}Active{{else}}Inactive{{end}}
         </span>
       </div>
     </div>
   </div>
 
-  <div class="glass glow" style="padding:22px;display:flex;flex-direction:column">
-    <h3 style="font-size:15px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px;color:#f1f5f9">
-      <i class="fas fa-coins" style="color:#fbbf24"></i> Points
-    </h3>
-    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 0">
-      <div style="font-size:42px;font-weight:800;color:#fbbf24;letter-spacing:-.02em">{{.Balance}}</div>
-      <div style="font-size:12px;color:#64748b;margin-top:4px;font-weight:500">Total Balance</div>
+  <div class="card" style="display:flex;flex-direction:column">
+    <div class="card-top">
+      <div class="label">Points</div>
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M8.5 10.5c0-1.5 1.5-2.5 3.5-2.5s3.5 1 3.5 2.5-1.5 2.5-3.5 2.5-3.5 1-3.5 2.5 1.5 2.5 3.5 2.5 3.5-1 3.5-2.5"/></svg>
+      </div>
     </div>
-    <div style="display:flex;gap:10px;justify-content:center;margin-top:auto;flex-wrap:wrap">
-      <button class="btn" style="padding:8px 18px;font-size:12px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#0f0f14;font-weight:600"
-              hx-post="/accounts/{{.Account.ID}}/claim" hx-target="#claim-result" hx-swap="innerHTML"><i class="fas fa-gift"></i> Claim 100M</button>
-      <button class="btn btn-success" style="padding:8px 18px;font-size:12px" hx-post="/accounts/{{.Account.ID}}/refresh" hx-target="closest div.glass" hx-swap="outerHTML"><i class="fas fa-sync"></i> Refresh</button>
-      <a href="/checkin" class="btn btn-primary" style="padding:8px 18px;font-size:12px"><i class="fas fa-check-double"></i> Check-In</a>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 0">
+      <div class="value" style="font-size:40px">{{.Balance}}</div>
+      <div style="font-size:12px;color:var(--faint);margin-top:4px">Total Balance</div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      <button class="btn btn-success" hx-post="/accounts/{{.Account.ID}}/claim" hx-target="#claim-result" hx-swap="innerHTML"><i class="fas fa-gift"></i> Claim 100M</button>
+      <button class="btn btn-ghost" hx-post="/accounts/{{.Account.ID}}/refresh" hx-target="closest .card" hx-swap="outerHTML"><i class="fas fa-sync"></i> Refresh</button>
+      <a href="/checkin" class="btn btn-primary"><i class="fas fa-check-double"></i> Check-In</a>
     </div>
     <div id="claim-result" style="margin-top:12px;text-align:center"></div>
   </div>
-</div>
-
-{{if .CheckinHistory}}
-<div style="margin-top:28px;max-width:900px">
-  <h3 style="font-size:16px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;letter-spacing:-.01em">
-    <i class="fas fa-history" style="color:#818cf8"></i> Check-In History
-  </h3>
-  <div style="display:grid;gap:8px">
-    {{range .CheckinHistory}}
-    <div class="glass" style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;{{if eq .Status "success"}}background:rgba(5,150,105,0.12);color:#34d399{{else}}background:rgba(220,38,38,0.12);color:#f87171{{end}}">
-          <i class="fas {{if eq .Status "success"}}fa-check{{else}}fa-times{{end}}" style="font-size:12px"></i>
-        </div>
-        <div>
-          <div style="font-size:13px;font-weight:600;color:#f1f5f9">{{.TaskID}}</div>
-          <div style="font-size:11px;color:#64748b;margin-top:2px">{{slice .CreatedAt 0 10}} {{slice .CreatedAt 11 19}}</div>
-        </div>
+<div class="card" style="display:flex;flex-direction:column">
+    <div class="card-top">
+      <div class="label">Outbound Proxy</div>
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><line x1="10" y1="13" x2="14" y2="13"/></svg>
       </div>
-      <span class="badge {{if gt .Points 0}}badge-success{{else}}badge-info{{end}}" style="font-size:12px">
-        {{if gt .Points 0}}+{{end}}{{.Points}} pts
-      </span>
     </div>
-    {{end}}
+    <div style="font-size:12px;color:#6b6b76;margin-top:-4px">Request akun ini keluar lewat IP proxy (None = IP utama)</div>
+    <form method="post" action="/accounts/set-proxy" onsubmit="document.getElementById('bind-proxy-val').value = ddGet('proxy-dd')" style="margin-top:10px">
+      <input type="hidden" name="account_id" value="{{.Account.ID}}">
+      <input type="hidden" name="proxy_id" id="bind-proxy-val" value="{{.ProxyID}}">
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="proxy-dd" style="flex:1;min-width:0"></div>
+        <button type="submit" class="btn btn-primary" style="flex-shrink:0"><i class="fas fa-check"></i> Bind</button>
+      </div>
+    </form>
+    {{if .ProxyName}}<div style="font-size:11px;color:var(--ok);margin-top:8px"><i class="fas fa-link"></i> Bound to: {{.ProxyName}}</div>{{end}}
+    <div style="margin-top:auto;padding-top:10px;font-size:11px;color:#6b6b76">Kelola proxy di tab <a href="/proxies" style="color:#8b9ce4">Proxies</a></div>
   </div>
+
+  {{if .CheckinHistory}}
+  <div style="margin-top:28px">
+    <div class="section-title">Check-In History</div>
+    <div class="acct-list">
+      {{range .CheckinHistory}}
+      <div class="acct-row">
+        <span class="status-dot {{if eq .Status "success"}}online{{else}}offline{{end}}"></span>
+        <div class="acct-info">
+          <div class="acct-email">{{.TaskID}}</div>
+          <div class="acct-meta">{{slice .CreatedAt 0 10}} {{slice .CreatedAt 11 19}}</div>
+        </div>
+        <div class="acct-points">{{if gt .Points 0}}+{{end}}{{.Points}} pts</div>
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
 </div>
-{{end}}
+<script>
+(function(){
+  var items = [{v:'0', t:'None (langsung)'}{{range .Proxies}}{{if .Active}}, {v:'{{.ID}}', t:'{{.Name}}'}{{end}}{{end}}];
+  var cur = '{{.ProxyID}}';
+  var ok = items.some(function(i){ return i.v === cur; });
+  if(!ok) cur = '0';
+  buildPillDropdown('proxy-dd', items, cur, function(v){
+    document.getElementById('bind-proxy-val').value = v;
+  });
+})();
+</script>
 {{end}}

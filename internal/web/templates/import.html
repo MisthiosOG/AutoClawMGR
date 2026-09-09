@@ -1,28 +1,37 @@
 {{define "content"}}
-<div style="margin-bottom:24px">
-  <h1 style="font-size:22px;font-weight:700;margin-bottom:4px">Import Token</h1>
-  <p style="color:#64748b;font-size:14px">Manually add an account by pasting tokens</p>
-</div>
+<div style="max-width:500px;margin:0 auto">
+  <div class="page-head">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div class="page-head-ic">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </div>
+      <div>
+        <h1>Import Token</h1>
+        <div class="subtitle">Tambah akun manual dengan paste token</div>
+      </div>
+    </div>
+  </div>
+  <div class="rule"></div>
 
-<div class="card" style="padding:24px;max-width:500px">
+  <div class="card" style="padding:24px">
   {{if .Error}}
-  <div style="background:#991b1b20;color:#f87171;padding:10px;border-radius:8px;font-size:13px;margin-bottom:16px">
+  <div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);color:#e08585;padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:16px">
     <i class="fas fa-exclamation-circle"></i> {{.Error}}
   </div>
   {{end}}
 
   <form method="post" action="/accounts/import">
     <div style="margin-bottom:14px">
-      <label style="font-size:13px;font-weight:500;color:#94a3b8;display:block;margin-bottom:6px">Account Name</label>
+      <label style="font-size:13px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px">Account Name</label>
       <input type="text" name="name" placeholder="My Account" value="{{.Name}}">
     </div>
     <div style="margin-bottom:14px">
-      <label style="font-size:13px;font-weight:500;color:#94a3b8;display:block;margin-bottom:6px">Access Token</label>
+      <label style="font-size:13px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px">Access Token</label>
       <input type="text" name="access_token" placeholder="Bearer eyJhbG..." required>
       <div style="font-size:11px;color:#475569;margin-top:4px">Paste the full access token including "Bearer " prefix</div>
     </div>
     <div style="margin-bottom:20px">
-      <label style="font-size:13px;font-weight:500;color:#94a3b8;display:block;margin-bottom:6px">Refresh Token (optional)</label>
+      <label style="font-size:13px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px">Refresh Token (optional)</label>
       <input type="text" name="refresh_token" placeholder="Bearer eyJhbG...">
     </div>
     <div style="display:flex;gap:8px">
@@ -30,5 +39,6 @@
       <button type="submit" class="btn btn-primary" style="flex:1"><i class="fas fa-key"></i> Import</button>
     </div>
   </form>
+  </div>
 </div>
 {{end}}

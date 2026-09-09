@@ -1,97 +1,161 @@
 {{define "content"}}
-<div style="margin-bottom:28px">
-  <h1 style="font-size:24px;font-weight:700;margin-bottom:6px;letter-spacing:-.02em">Dashboard</h1>
-  <p style="color:#64748b;font-size:14px">Overview of your accounts and rewards</p>
-</div>
 
-<div class="stat-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px">
-  <div class="glass glow" style="padding:20px;position:relative;overflow:hidden">
-    <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(99,102,241,0.06)"></div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;box-shadow:0 4px 12px rgba(99,102,241,0.2)"><i class="fas fa-users"></i></div>
-      <div class="stat-label">Total Accounts</div>
+<section class="hero">
+  <div>
+    <div class="eyebrow"><span class="dot"></span>AutoClaw Gateway · Live</div>
+    <h1 class="hero-h1">Control every account from <span class="hl-c0">one</span> <span class="hl-c0">command</span> <span class="hl-c0">deck</span>.</h1>
+    <p class="lead">Monitor points, track requests, and manage your relay fleet in real time. Precise, calm, and built to scale from a single key to a full farm.</p>
+    <div class="hero-actions">
+      <a href="/accounts" class="nbtn primary">
+        View Accounts
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+      <a href="/docs" class="nbtn ghost">Read the docs</a>
     </div>
-    <div class="stat-value">{{.TotalAccounts}}</div>
-  </div>
-  <div class="glass glow" style="padding:20px;position:relative;overflow:hidden">
-    <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(5,150,105,0.06)"></div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#059669,#047857);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;box-shadow:0 4px 12px rgba(5,150,105,0.2)"><i class="fas fa-check-circle"></i></div>
-      <div class="stat-label">Active</div>
+    <div class="hero-meta">
+      <div class="m"><b>{{.TotalAccounts}}</b><span>Accounts</span></div>
+      <div class="m"><b>{{.ActiveAccounts}}</b><span>Active</span></div>
+      <div class="m"><b>{{.TotalReq}}</b><span>Requests</span></div>
+      <div class="m"><b>¥{{printf "%.2f" .TotalCost}}</b><span>Est. Cost</span></div>
     </div>
-    <div class="stat-value">{{.ActiveAccounts}}</div>
   </div>
-  <div class="glass glow" style="padding:20px;position:relative;overflow:hidden">
-    <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(251,191,36,0.06)"></div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;box-shadow:0 4px 12px rgba(251,191,36,0.2)"><i class="fas fa-coins"></i></div>
-      <div class="stat-label">Total Points</div>
-    </div>
-    <div class="stat-value">{{.TotalPoints}}</div>
-  </div>
-  <div class="glass glow" style="padding:20px;position:relative;overflow:hidden">
-    <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(96,165,250,0.06)"></div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#2563eb);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;box-shadow:0 4px 12px rgba(96,165,250,0.2)"><i class="fas fa-chart-line"></i></div>
-      <div class="stat-label">API Requests</div>
-    </div>
-    <div class="stat-value">{{.TotalReq}}</div>
-  </div>
-  <div class="glass glow" style="padding:20px;position:relative;overflow:hidden">
-    <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(251,191,36,0.06)"></div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;box-shadow:0 4px 12px rgba(251,191,36,0.2)"><i class="fas fa-calculator"></i></div>
-      <div class="stat-label">Tokens Used</div>
-    </div>
-    <div class="stat-value">{{.TotalTokens}}</div>
-  </div>
-  <div class="glass glow" style="padding:20px;position:relative;overflow:hidden">
-    <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(52,211,153,0.06)"></div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#059669,#047857);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;box-shadow:0 4px 12px rgba(52,211,153,0.2)"><i class="fas fa-coins"></i></div>
-      <div class="stat-label">Estimated Cost</div>
-    </div>
-    <div class="stat-value" style="font-size:18px">¥{{printf "%.4f" .TotalCost}}</div>
-  </div>
-</div>
 
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-  <h2 style="font-size:16px;font-weight:700;letter-spacing:-.01em">Accounts</h2>
-  <div style="display:flex;gap:8px">
-    <a href="/checkin" class="btn btn-success" style="font-size:12px;padding:7px 14px"><i class="fas fa-check-double"></i> Check-In All</a>
-    <a href="/accounts" class="btn btn-ghost" style="font-size:12px;padding:7px 14px"><i class="fas fa-eye"></i> Manage</a>
-  </div>
-</div>
-
-<div class="card-grid" style="display:grid;gap:8px">
-  {{range .Accounts}}
-  <div class="glass" style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
-    <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,{{if eq .Provider "google"}}#ea4335,#c5221f{{else}}#4f46e5,#7c3aed{{end}});display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;flex-shrink:0">
-        <i class="fab {{if eq .Provider "google"}}fa-google{{else}}fa-z{{end}}"></i>
+  <div class="side-card" id="live-card">
+    <div class="eyebrow" style="margin-bottom:10px"><span class="dot"></span>Tokens served</div>
+    <div id="tokens-served" style="font-family:var(--font-mono);font-weight:600;font-size:clamp(24px,2.4vw,32px);letter-spacing:-.02em;line-height:1.15;color:var(--ink)">{{.TotalTokens}}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--hair);margin-top:16px;padding-top:14px;gap:10px">
+      <div>
+        <div style="font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase">Requests</div>
+        <div id="live-requests" style="font-family:var(--font-mono);font-weight:600;font-size:20px;letter-spacing:-.02em;margin-top:4px">{{.TotalReq}}</div>
       </div>
-      <div style="min-width:0">
-        <div style="font-weight:600;font-size:14px">{{if .Name}}{{.Name}}{{else}}Account #{{.ID}}{{end}}</div>
-        <div style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span><i class="fas fa-coins" style="color:#fbbf24"></i> {{.Points}} pts</span>
-          {{if .LastCheckinDate}}<span><i class="fas fa-calendar-check" style="color:#34d399"></i> {{.LastCheckinDate}}</span>{{end}}
-        </div>
+      <div>
+        <div style="font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase;display:flex;align-items:center;justify-content:space-between">Tokens / min <span class="live" style="font-size:9px;color:var(--ok)">Live</span></div>
+        <div id="live-tpm" style="font-family:var(--font-mono);font-weight:600;font-size:20px;letter-spacing:-.02em;margin-top:4px;color:var(--ok)">0</div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;flex-shrink:0">
-      <a href="/accounts/{{.ID}}" class="btn btn-ghost" style="padding:6px 10px;font-size:12px"><i class="fas fa-eye"></i></a>
+  </div>
+</section>
+
+<script>
+(function(){
+  var cur = {{.TotalTokens}}, curReq = {{.TotalReq}};
+  var elTok = document.getElementById('tokens-served');
+  var elReq = document.getElementById('live-requests');
+  var elTpm = document.getElementById('live-tpm');
+  function fmt(n){ return n.toLocaleString('en-US'); }
+  function animate(el, from, to){
+    if(from === to){ el.textContent = fmt(to); return; }
+    var t0 = performance.now();
+    function step(t){
+      var p = Math.min(1, (t - t0) / 500);
+      var v = Math.round(from + (to - from) * p);
+      el.textContent = fmt(v);
+      if(p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  function poll(){
+    fetch('/api/live-stats').then(function(r){ return r.json(); }).then(function(d){
+      animate(elTok, cur, d.tokens);
+      animate(elReq, curReq, d.requests);
+      elTpm.textContent = fmt(d.tokens_per_min || 0);
+      cur = d.tokens; curReq = d.requests;
+    }).catch(function(){});
+  }
+  setInterval(poll, 2000);
+  poll();
+})();
+</script>
+
+<div class="sect-head">
+  <div class="sect-title">
+    <span class="sq"></span>
+    <div>
+      <h2>Live Metrics</h2>
+      <p>Real-time usage across your fleet</p>
     </div>
   </div>
-  {{else}}
-  <div class="glass" style="padding:40px;text-align:center">
-    <i class="fas fa-users" style="font-size:48px;color:#2a2a32;margin-bottom:16px"></i>
-    <div style="font-size:16px;font-weight:600;margin-bottom:8px">No accounts yet</div>
-    <p style="color:#64748b;font-size:14px;margin-bottom:20px">Add your first AutoClaw account to get started</p>
-    <div style="display:flex;justify-content:center;gap:12px">
-      <a href="/accounts/login" class="btn btn-primary"><i class="fas fa-sign-in-alt"></i> Login OAuth</a>
-      <a href="/accounts/import" class="btn btn-ghost"><i class="fas fa-key"></i> Import Token</a>
-    </div>
-  </div>
-  {{end}}
 </div>
+
+<div class="stats">
+  <div class="stat t-points">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v10M8.5 10.5c0-1.5 1.5-2.5 3.5-2.5s3.5 1 3.5 2.5-1.5 2.5-3.5 2.5-3.5 1-3.5 2.5 1.5 2.5 3.5 2.5 3.5-1 3.5-2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+    <div class="val">{{.TotalPoints}}</div>
+    <div class="lab">Total Points</div>
+  </div>
+  <div class="stat t-active">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.7"/><path d="M4.5 20a7.5 7.5 0 0115 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+    <div class="val">{{.ActiveAccounts}}</div>
+    <div class="lab">Active</div>
+  </div>
+  <div class="stat t-requests">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="val">{{.TotalReq}}</div>
+    <div class="lab">Requests</div>
+  </div>
+  <div class="stat t-tokens">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+    <div class="val">{{.TotalTokens}}</div>
+    <div class="lab">Tokens</div>
+  </div>
+  <div class="stat t-cost">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none"><line x1="12" y1="1" x2="12" y2="23" stroke="currentColor" stroke-width="1.7"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+    <div class="val">¥{{printf "%.4f" .TotalCost}}</div>
+    <div class="lab">Est. Cost</div>
+  </div>
+  <div class="stat t-latency">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.7"/><polyline points="12 6 12 12 16 14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="val">{{if .LatencyMs}}{{.LatencyMs}}ms{{else}}-{{end}}</div>
+    <div class="lab">Latency</div>
+  </div>
+</div>
+
+<div class="sect-head">
+  <div class="sect-title">
+    <span class="sq"></span>
+    <div>
+      <h2>Active Accounts</h2>
+      <p>All systems operational</p>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head">
+    <div class="left">
+      <span class="sq"></span>
+      <div>
+        <h3>Active Accounts</h3>
+        <div class="sub">All systems operational</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="live"><i></i>Live</span>
+      <span><b>{{.ActiveAccounts}}</b> online</span>
+    </div>
+  </div>
+
+  <div class="acctlist">
+    {{range .Accounts}}
+    <div class="acct">
+      <span class="ava" style="background:linear-gradient(135deg,#8b9ce4,#7c5fd6)">
+        {{if .Name}}{{slice .Name 0 1}}{{else}}A{{end}}
+        <span class="online" style="display:{{if .Active}}block{{else}}none{{end}}"></span>
+      </span>
+      <div class="info">
+        <div class="user"><b>{{if and .Name (ne .Name "None")}}{{.Name}}{{else}}Account #{{.ID}}{{end}}</b></div>
+        <div class="uid">{{if .UserID}}user_id {{.UserID}}{{else}}{{.Provider}}{{end}}</div>
+      </div>
+      <div class="pts">
+        <div class="n">{{.Points}}<small>pts</small></div>
+        <div class="bar"><i style="width:{{if gt .Points 0}}100%{{else}}0%{{end}}"></i></div>
+        <div class="meta"><span class="tier">{{if gt .Points 10000}}Diamond{{else if gt .Points 5000}}Gold{{else if gt .Points 1000}}Silver{{else}}Bronze{{end}}</span><span>{{.Points}} pts</span></div>
+      </div>
+    </div>
+    {{else}}
+    <div class="acct-empty">No accounts yet — add your first AutoClaw account to get started.</div>
+    {{end}}
+  </div>
+</div>
+
 {{end}}

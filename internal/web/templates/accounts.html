@@ -1,49 +1,60 @@
 {{define "content"}}
-<div style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between">
-  <div>
-    <h1 style="font-size:22px;font-weight:700;margin-bottom:4px">Accounts</h1>
-    <p style="color:#64748b;font-size:14px">Manage your AutoClaw accounts</p>
+<div class="page-head">
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="page-head-ic">
+      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </div>
+    <div>
+      <h1>Accounts</h1>
+      <div class="subtitle">Kelola akun AutoClaw kamu</div>
+    </div>
   </div>
-  <div style="display:flex;gap:8px">
-    <a href="/accounts/login" class="btn btn-primary"><i class="fas fa-sign-in-alt"></i> Login OAuth</a>
+  <div class="head-actions">
+    <a href="/accounts/login" class="btn btn-primary"><i class="fas fa-right-to-bracket"></i> Login Z.ai</a>
+    <form method="post" action="/accounts/import-from-app" class="win-only" style="display:inline" onsubmit="this.querySelector('button').innerHTML='<i class=\'fas fa-spinner fa-spin\'></i> Importing...'">
+      <button type="submit" class="btn btn-ghost"><i class="fas fa-download"></i> Import dari App</button>
+    </form>
     <a href="/accounts/import" class="btn btn-ghost"><i class="fas fa-key"></i> Import Token</a>
   </div>
 </div>
+<div class="rule"></div>
 
-<div style="display:grid;gap:12px">
+<div class="acct-list">
   {{range .Accounts}}
-  <div class="card" style="padding:16px;display:flex;align-items:center;justify-content:space-between">
-    <div style="display:flex;align-items:center;gap:14px;flex:1">
-      <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,{{if .Provider | eq "google"}}#ea4335,#c5221f{{else}}#4f46e5,#7c3aed{{end}});display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px">
-        <i class="fab {{if .Provider | eq "google"}}fa-google{{else}}fa-z{{end}}"></i>
-      </div>
-      <div style="flex:1">
-        <div style="font-weight:600;font-size:14px">{{if .Name}}{{.Name}}{{else}}Account #{{.ID}}{{end}}</div>
-        <div style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <span><i class="fas fa-coins" style="color:#fbbf24"></i> {{.Points}} pts</span>
-          <span>{{if .UserID}}<i class="fas fa-user"></i> {{.UserID}}{{end}}</span>
-          <span class="badge {{if .Active}}badge-success{{else}}badge-danger{{end}}">
-            {{if .Active}}Active{{else}}Inactive{{end}}
-          </span>
-          <span style="color:#475569"><i class="far fa-calendar"></i> {{slice .CreatedAt 0 10}}</span>
-        </div>
+  <div class="acct-row">
+    <span class="status-dot {{if .Active}}online{{else}}offline{{end}}"></span>
+    <div class="icon-circle" style="width:38px;height:38px;background:{{if .Provider | eq "google"}}rgba(234,67,53,0.12){{else}}rgba(99,102,241,0.12){{end}};border-color:{{if .Provider | eq "google"}}rgba(234,67,53,0.3){{else}}rgba(99,102,241,0.3){{end}}">
+      <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:{{if .Provider | eq "google"}}#ea4335{{else}}var(--accent){{end}}"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </div>
+    <div class="acct-info">
+      <div class="acct-email">{{if .Name}}{{.Name}}{{else}}Account #{{.ID}}{{end}}</div>
+      <div class="acct-meta">
+        {{if .UserID}}user_id {{.UserID}}{{else}}—{{end}}
+        <span style="margin:0 6px">·</span>
+        <i class="fas fa-coins" style="font-size:10px"></i> {{.Points}} pts
+        {{if .CreatedAt}}<span style="margin:0 6px">·</span>{{slice .CreatedAt 0 10}}{{end}}
       </div>
     </div>
-    <div style="display:flex;gap:8px">
-      <a href="/accounts/{{.ID}}" class="btn btn-ghost" style="padding:6px 10px"><i class="fas fa-eye"></i></a>
-      <a href="/accounts/{{.ID}}/delete" class="btn btn-danger" style="padding:6px 10px" onclick="return confirm('Hapus akun #{{.ID}}?')"><i class="fas fa-trash"></i></a>
+    <div class="row-actions">
+      <a href="/accounts/{{.ID}}" class="btn btn-ghost" style="padding:6px 12px"><i class="fas fa-eye"></i></a>
+      <a href="/accounts/{{.ID}}/delete" class="btn btn-danger" style="padding:6px 12px" onclick="return confirm('Hapus akun #{{.ID}}?')"><i class="fas fa-trash"></i></a>
     </div>
   </div>
   {{else}}
-  <div class="card" style="padding:40px;text-align:center">
-    <i class="fas fa-users" style="font-size:48px;color:#2a2a32;margin-bottom:16px"></i>
-    <div style="font-size:16px;font-weight:600;margin-bottom:8px">No accounts yet</div>
-    <p style="color:#64748b;font-size:14px;margin-bottom:20px">Add your first AutoClaw account to get started</p>
-    <div style="display:flex;justify-content:center;gap:12px">
-      <a href="/accounts/login" class="btn btn-primary"><i class="fas fa-sign-in-alt"></i> Login OAuth</a>
-      <a href="/accounts/import" class="btn btn-ghost"><i class="fas fa-key"></i> Import Token</a>
+  <div class="acct-row" style="justify-content:center;padding:40px">
+    <div style="text-align:center">
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px">No accounts yet</div>
+      <div class="acct-meta" style="margin-bottom:18px">Add your first AutoClaw account to get started</div>
+      <form method="post" action="/accounts/import-from-app" class="win-only" style="display:inline-block">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-download"></i> Import dari App</button>
+      </form>
     </div>
   </div>
   {{end}}
 </div>
+<script>
+if(!(navigator.platform && navigator.platform.toLowerCase().includes('win'))){
+  document.querySelectorAll('.win-only').forEach(function(el){ el.style.display = 'none'; });
+}
+</script>
 {{end}}

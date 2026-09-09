@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/hirotomasato/autoclawpi/internal/db"
+	"github.com/MisthiosOG/autoclawpi/internal/db"
 )
 
 func cmdAccount(args []string) error {

@@ -1,0 +1,317 @@
+{{define "content"}}
+<div class="pg-card">
+
+  <div class="pg-top">
+    <div style="display:flex;align-items:center;gap:10px">
+      <svg viewBox="0 0 24 24" width="18" height="18" stroke="var(--accent)" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      <span style="font-size:15px;font-weight:700;color:var(--ink)">Playground</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="dropdown" id="model-dropdown" style="min-width:230px">
+        <button type="button" class="dropdown-btn" id="dropdown-btn">
+          <div style="display:flex;align-items:center;gap:9px;min-width:0">
+            <span class="dropdown-dot-top"></span>
+            <span id="selected-model-chip" style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{if .Models}}{{index .Models 0}}{{else}}glm-5.3{{end}}</span>
+          </div>
+          <svg class="dropdown-chev" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="dropdown-menu" id="dropdown-menu">
+          {{range .Models}}
+          <div class="dropdown-item" data-value="{{.}}">
+            <span class="dropdown-dot"></span>
+            <span class="dropdown-name">{{.}}</span>
+          </div>
+          {{end}}
+        </div>
+      </div>
+      <button type="button" class="btn btn-ghost" id="reset-btn" style="padding:9px 14px"><i class="fas fa-trash" style="font-size:12px"></i> Reset chat</button>
+    </div>
+  </div>
+
+  <div class="pg-body">
+    <div class="pg-side">
+      <div class="pg-section-label">System prompt</div>
+      <textarea id="system-prompt" rows="4" placeholder="Kamu adalah asisten yang..." style="margin-top:8px"></textarea>
+
+      <div style="margin-top:22px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="pg-section-label" style="text-transform:none;letter-spacing:0">Temperature</span>
+          <span id="temp-value" style="font-size:13px;font-weight:700;color:var(--ink)">0.7</span>
+        </div>
+        <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7">
+        <div class="pg-hint">Makin tinggi makin kreatif / acak.</div>
+      </div>
+
+      <div style="margin-top:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="pg-section-label" style="text-transform:none;letter-spacing:0">Max tokens</span>
+          <span id="maxtok-value" style="font-size:13px;font-weight:700;color:var(--ink)">1024</span>
+        </div>
+        <input type="range" id="max-tokens" min="64" max="8192" step="64" value="1024">
+      </div>
+
+      <div style="margin-top:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="pg-section-label" style="text-transform:none;letter-spacing:0">Top P</span>
+          <span id="topp-value" style="font-size:13px;font-weight:700;color:var(--ink)">1.0</span>
+        </div>
+        <input type="range" id="top-p" min="0.05" max="1" step="0.05" value="1">
+      </div>
+    </div>
+
+    <div class="pg-chat">
+      <div id="pg-msgs" class="pg-msgs">
+        <div id="pg-empty" class="pg-empty">
+          <div style="font-size:15px;font-weight:700;color:var(--ink)">Belum ada pesan.</div>
+          <div style="font-size:13px;color:var(--faint);margin-top:8px">Pilih model di kanan atas, atur parameter, lalu mulai ngobrol.</div>
+        </div>
+      </div>
+
+      <div id="pg-err" style="display:none;margin:0 16px;padding:12px 14px;border-radius:10px;background:rgba(224,133,133,0.1);border:1px solid rgba(224,133,133,0.25);color:#e08585;font-size:13px"></div>
+
+      <div class="pg-inputbar">
+        <textarea id="pg-input" rows="1" placeholder="Ketik pesan... (Enter kirim, Shift+Enter baris baru)"></textarea>
+        <button type="button" class="btn btn-primary" id="send-btn" style="padding:11px 18px"><i class="fas fa-paper-plane"></i> Kirim</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<style>
+  main{background-image:linear-gradient(rgba(255,255,255,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.02) 1px,transparent 1px);background-size:56px 56px}
+  .pg-card{background:var(--surface);border:1px solid var(--hair);border-radius:18px;max-width:1220px;margin:0 auto;height:calc(100vh - 120px);min-height:560px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.35)}
+  .pg-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 18px;border-bottom:1px solid var(--hair);flex-shrink:0}
+  .pg-body{flex:1;display:flex;min-height:0}
+  .pg-side{width:300px;flex-shrink:0;border-right:1px solid var(--hair);padding:18px 16px;overflow-y:auto}
+  .pg-chat{flex:1;display:flex;flex-direction:column;min-width:0}
+  .pg-msgs{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px}
+  .pg-msgs::-webkit-scrollbar,.pg-side::-webkit-scrollbar,.dropdown-menu::-webkit-scrollbar{width:8px}
+  .pg-msgs::-webkit-scrollbar-thumb,.pg-side::-webkit-scrollbar-thumb,.dropdown-menu::-webkit-scrollbar-thumb{background:var(--hair2);border-radius:4px}
+  .pg-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px}
+  .pg-hint{font-size:11.5px;color:var(--faint);margin-top:6px}
+  .pg-section-label{font-size:11.5px;font-weight:600;color:var(--muted);letter-spacing:0.02em}
+  .pg-inputbar{display:flex;gap:10px;align-items:flex-end;padding:14px 16px;border-top:1px solid var(--hair);flex-shrink:0}
+  #pg-input{flex:1;resize:none;min-height:44px;max-height:140px;font-size:13px;line-height:1.5;padding:11px 14px}
+  .msg{max-width:80%;padding:10px 14px;border-radius:14px;font-size:13.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+  .msg.user{align-self:flex-end;background:var(--elev2);border:1px solid var(--hair2);color:var(--ink);border-bottom-right-radius:4px}
+  .msg.assistant{align-self:flex-start;background:var(--elev);border:1px solid var(--hair);color:var(--ink);border-bottom-left-radius:4px}
+  .msg .reasoning{display:block;color:var(--faint);font-size:11.5px;border-left:2px solid var(--hair2);padding-left:8px;margin-bottom:8px;font-style:italic}
+  .msg.assistant.streaming{border-color:var(--accent)}
+  .msg-role{display:block;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+  textarea{background:var(--elev);border:1px solid var(--hair2);border-radius:10px;padding:10px 12px;color:var(--ink);font-size:13px;font-family:inherit;width:100%}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  textarea::-webkit-scrollbar{width:8px}
+  textarea::-webkit-scrollbar-thumb{background:var(--hair2);border-radius:4px}
+  input[type="range"]{width:100%;accent-color:var(--accent);margin-top:10px;background:transparent}
+  .dropdown{position:relative;user-select:none}
+  .dropdown-btn{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--elev);border:1px solid var(--hair2);border-radius:99px;padding:9px 14px;color:var(--ink);font-size:13px;cursor:pointer;transition:border-color .15s,box-shadow .15s;min-width:230px}
+  .dropdown-btn:hover{border-color:var(--hair2)}
+  .dropdown-btn.open{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,156,228,0.15)}
+  .dropdown-chev{width:16px;height:16px;stroke:var(--muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s;flex-shrink:0}
+  .dropdown-btn.open .dropdown-chev{transform:rotate(180deg)}
+  .dropdown-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:230px;background:var(--elev);border:1px solid var(--hair2);border-radius:12px;padding:6px;box-shadow:0 16px 40px rgba(0,0,0,0.55);z-index:50;display:none;max-height:280px;overflow-y:auto}
+  .dropdown-menu.open{display:block}
+  .dropdown-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;font-size:13px;color:#c9c9d1;cursor:pointer;transition:background .12s,color .12s}
+  .dropdown-item:hover{background:var(--elev2);color:var(--ink)}
+  .dropdown-item.selected{background:rgba(99,102,241,0.12);color:#a5b4fc}
+  .dropdown-dot{width:6px;height:6px;border-radius:50%;background:var(--faint);flex-shrink:0}
+  .dropdown-item.selected .dropdown-dot{background:var(--accent)}
+  .dropdown-dot-top{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0}
+</style>
+
+<script>
+var selectedModel = {{if .Models}}"{{index .Models 0}}"{{else}}"glm-5.3"{{end}};
+var chat = [];      // {role, content} — tanpa system prompt
+var busy = false;
+var msgsEl = document.getElementById('pg-msgs');
+var emptyEl = document.getElementById('pg-empty');
+var inputEl = document.getElementById('pg-input');
+var errEl = document.getElementById('pg-err');
+
+function setModel(m){
+  selectedModel = m;
+  document.getElementById('selected-model-chip').textContent = m;
+  document.querySelectorAll('.dropdown-item').forEach(function(el){
+    el.classList.toggle('selected', el.getAttribute('data-value') === m);
+  });
+}
+document.getElementById('dropdown-btn').addEventListener('click', function(e){
+  e.stopPropagation();
+  this.classList.toggle('open');
+  document.getElementById('dropdown-menu').classList.toggle('open');
+});
+document.querySelectorAll('.dropdown-item').forEach(function(el){
+  el.addEventListener('click', function(){
+    setModel(this.getAttribute('data-value'));
+    document.getElementById('dropdown-btn').classList.remove('open');
+    document.getElementById('dropdown-menu').classList.remove('open');
+  });
+});
+document.addEventListener('click', function(){
+  document.getElementById('dropdown-btn').classList.remove('open');
+  document.getElementById('dropdown-menu').classList.remove('open');
+});
+setModel(selectedModel);
+
+['temperature','max-tokens','top-p'].forEach(function(id){
+  document.getElementById(id).addEventListener('input', function(){
+    document.getElementById(id==='temperature'?'temp-value':id==='max-tokens'?'maxtok-value':'topp-value').textContent =
+      (id==='max-tokens') ? this.value : parseFloat(this.value).toFixed(id==='top-p'?2:1);
+  });
+});
+
+function bubble(role, text){
+  var div = document.createElement('div');
+  div.className = 'msg ' + role;
+  var roleEl = document.createElement('span');
+  roleEl.className = 'msg-role';
+  roleEl.textContent = role === 'user' ? 'Kamu' : (selectedModel || 'Model');
+  div.appendChild(roleEl);
+  var body = document.createElement('span');
+  body.textContent = text;
+  div.appendChild(body);
+  msgsEl.appendChild(div);
+  scrollBottom();
+  return div;
+}
+function scrollBottom(){
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+function showError(msg){
+  errEl.style.display = 'block';
+  errEl.textContent = 'Error: ' + msg;
+}
+
+function send(){
+  if(busy) return;
+  var text = inputEl.value.trim();
+  if(!text) return;
+  errEl.style.display = 'none';
+  emptyEl.style.display = 'none';
+
+  chat.push({role:'user', content:text});
+  bubble('user', text);
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  busy = true;
+  var btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
+
+  var messages = [];
+  var sys = document.getElementById('system-prompt').value.trim();
+  if(sys) messages.push({role:'system', content:sys});
+  messages = messages.concat(chat);
+
+  var div = bubble('assistant', '');
+  var body = div.querySelector('span:last-child');
+  div.classList.add('streaming');
+
+  fetch('/v1/chat/completions', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      model: selectedModel,
+      messages: messages,
+      stream: true,
+      temperature: parseFloat(document.getElementById('temperature').value),
+      max_tokens: parseInt(document.getElementById('max-tokens').value),
+      top_p: parseFloat(document.getElementById('top-p').value)
+    })
+  }).then(function(resp){
+    if(!resp.ok){
+      return resp.text().then(function(t){
+        throw new Error('HTTP ' + resp.status + ' ' + t.slice(0,200));
+      });
+    }
+    var reader = resp.body.getReader();
+    var dec = new TextDecoder();
+    var buf = '', content = '', reasoning = '', doneSSE = false;
+
+    function pump(){
+      return reader.read().then(function(res){
+        if(res.done){
+          finish();
+          return;
+        }
+        buf += dec.decode(res.value, {stream:true});
+        var lines = buf.split('\n');
+        buf = lines.pop();
+        for(var i=0;i<lines.length;i++){
+          var line = lines[i].trim();
+          if(!line || !line.startsWith('data:')) continue;
+          var payload = line.slice(5).trim();
+          if(payload === '[DONE]'){ doneSSE = true; continue; }
+          try{
+            var j = JSON.parse(payload);
+            if(j.error){ throw new Error(j.error.message || 'stream error'); }
+            var ch = j.choices && j.choices[0];
+            if(ch && ch.delta){
+              content += ch.delta.content || '';
+              reasoning += ch.delta.reasoning_content || '';
+            }
+          }catch(e){ if(e.message.indexOf('stream error')===0) throw e; }
+        }
+        render();
+        return pump();
+      });
+    }
+    function render(){
+      body.innerHTML = '';
+      if(reasoning){
+        var r = document.createElement('span');
+        r.className = 'reasoning';
+        r.textContent = reasoning;
+        body.appendChild(r);
+      }
+      var c = document.createElement('span');
+      c.textContent = content;
+      body.appendChild(c);
+      scrollBottom();
+    }
+    function finish(){
+      div.classList.remove('streaming');
+      busy = false;
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-paper-plane"></i> Kirim';
+      if(!content && !reasoning){
+        body.textContent = '(respons kosong — coba kirim ulang)';
+      }
+      chat.push({role:'assistant', content: content});
+      scrollBottom();
+    }
+    return pump();
+  }).catch(function(e){
+    div.remove();
+    chat.pop(); // buang user msg yang gagal biar chat konsisten
+    showError(e.message || 'request gagal');
+    busy = false;
+    var btn = document.getElementById('send-btn');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Kirim';
+  });
+}
+
+document.getElementById('send-btn').addEventListener('click', send);
+inputEl.addEventListener('keydown', function(e){
+  if(e.key === 'Enter' && !e.shiftKey){
+    e.preventDefault();
+    send();
+  }
+});
+inputEl.addEventListener('input', function(){
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 140) + 'px';
+});
+
+document.getElementById('reset-btn').addEventListener('click', function(){
+  if(chat.length && !confirm('Reset percakapan?')) return;
+  chat = [];
+  msgsEl.innerHTML = '';
+  msgsEl.appendChild(emptyEl);
+  emptyEl.style.display = 'flex';
+  errEl.style.display = 'none';
+});
+</script>
+{{end}}

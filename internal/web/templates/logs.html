@@ -1,52 +1,52 @@
 {{define "content"}}
-<div style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between">
-  <div>
-    <h1 style="font-size:22px;font-weight:700;margin-bottom:4px">Request Logs</h1>
-    <p style="color:#64748b;font-size:14px">Live API request log — terminal view</p>
+<div class="page-head">
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="page-head-ic">
+      <svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+    </div>
+    <div>
+      <h1>Request Logs</h1>
+      <div class="subtitle">Log request API real-time</div>
+    </div>
   </div>
-  <div style="display:flex;gap:12px;font-size:12px">
-    <div style="padding:6px 12px;background:rgba(0,0,0,0.3);border-radius:8px;border:1px solid rgba(255,255,255,0.04);text-align:center">
-      <div style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.05em">Req</div>
-      <div style="font-weight:700;color:#34d399;font-family:mono">{{.TotalReq}}</div>
+  <div style="display:flex;gap:8px">
+    <div style="padding:6px 14px;background:var(--surface);border:1px solid var(--hair);border-radius:8px;text-align:center">
+      <div style="font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em">Req</div>
+      <div style="font-weight:700;color:var(--ok);font-size:14px;font-family:var(--font-mono)">{{.TotalReq}}</div>
     </div>
-    <div style="padding:6px 12px;background:rgba(0,0,0,0.3);border-radius:8px;border:1px solid rgba(255,255,255,0.04);text-align:center">
-      <div style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.05em">Tokens</div>
-      <div style="font-weight:700;color:#60a5fa;font-family:mono">{{.TotalTokens}}</div>
+    <div style="padding:6px 14px;background:var(--surface);border:1px solid var(--hair);border-radius:8px;text-align:center">
+      <div style="font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em">Tokens</div>
+      <div style="font-weight:700;color:var(--accent);font-size:14px;font-family:var(--font-mono)">{{.TotalTokens}}</div>
     </div>
-    <div style="padding:6px 12px;background:rgba(0,0,0,0.3);border-radius:8px;border:1px solid rgba(255,255,255,0.04);text-align:center">
-      <div style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.05em">Cost ¥</div>
-      <div style="font-weight:700;color:#fbbf24;font-family:mono">{{printf "%.4f" .TotalCost}}</div>
+    <div style="padding:6px 14px;background:var(--surface);border:1px solid var(--hair);border-radius:8px;text-align:center">
+      <div style="font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em">Cost ¥</div>
+      <div style="font-weight:700;color:var(--gold);font-size:14px;font-family:var(--font-mono)">{{printf "%.4f" .TotalCost}}</div>
     </div>
   </div>
 </div>
+<div class="rule"></div>
 
 {{if .Logs}}
-<div style="background:#050508;border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:14px;font-family:'JetBrains Mono','Fira Code','Cascadia Code',monospace;font-size:12px;line-height:1.7;overflow:auto;max-height:calc(100vh - 200px)">
-  <div style="color:#2a2a32;margin-bottom:8px;font-size:11px;user-select:none">
-    <span style="color:#6366f1">◆</span> autoclawpi — last {{len .Logs}} requests
-  </div>
+<div class="acct-list">
   {{range .Logs}}
-  <div style="display:flex;gap:8px;padding:2px 0;white-space:nowrap">
+  <div class="acct-row" style="gap:12px;padding:12px 18px">
     {{if eq .Status "success"}}
-    <span style="color:#34d399;flex-shrink:0">✓</span>
+    <span class="status-dot online"></span>
     {{else}}
-    <span style="color:#f87171;flex-shrink:0">✗</span>
+    <span class="status-dot" style="background:var(--gold)"></span>
     {{end}}
-    <span style="color:#475569;flex-shrink:0">{{slice .CreatedAt 11 19}}</span>
-    <span style="color:#818cf8;flex-shrink:0">{{printf "%-18s" .Model}}</span>
-    <span style="color:#475569">→{{.PromptTokens}} ←{{.CompletionTokens}} ∑{{.TotalTokens}}</span>
-    <span style="color:#fbbf24">¥{{printf "%.4f" .Cost}}</span>
-    {{if .Error}}
-    <span style="color:#f87171">⚠ {{.Error}}</span>
-    {{end}}
+    <div class="acct-info">
+      <div class="acct-email">{{if .Error}}{{.Model}} — <span style="color:#e08585">{{.Status}}</span>{{else}}{{.Model}}{{end}}</div>
+      <div class="acct-meta">{{slice .CreatedAt 11 19}} · {{if .TotalTokens}}{{.PromptTokens}}→{{.CompletionTokens}} · ∑{{.TotalTokens}} tokens · {{end}}{{if .DurationMs}}{{.DurationMs}}ms{{end}}{{if .Error}} · {{.Error}}{{end}}</div>
+    </div>
+    {{if gt .TotalTokens 0}}<div class="acct-points">¥{{printf "%.4f" .Cost}}</div>{{end}}
   </div>
   {{end}}
 </div>
 {{else}}
-<div style="background:#050508;border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:40px;text-align:center;font-family:mono;font-size:13px;color:#2a2a32">
-  <div style="margin-bottom:12px;font-size:32px">~</div>
-  <div>$ <span style="color:#475569">curl http://localhost:8787/v1/chat/completions</span></div>
-  <div style="margin-top:4px;color:#2a2a32">_</div>
+<div class="card" style="padding:40px;text-align:center;max-width:500px;margin:0 auto">
+  <div style="font-size:15px;font-weight:600;margin-bottom:6px">No requests yet</div>
+  <div class="acct-meta">Requests will appear here once you use the API</div>
 </div>
 {{end}}
 {{end}}

@@ -1,0 +1,170 @@
+{{define "content"}}
+<div style="max-width:520px;margin:0 auto">
+  <div class="page-head">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div class="icon-circle" style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,rgba(139,156,228,0.15),rgba(124,58,237,0.08));border-color:rgba(99,102,241,0.3)">
+        <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:var(--accent)"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      </div>
+      <div>
+        <h1>Login Z.ai</h1>
+        <div class="subtitle">OAuth langsung dari browser — tanpa app AutoClaw</div>
+      </div>
+    </div>
+  </div>
+  <div class="rule"></div>
+
+  <div class="card" style="padding:28px">
+  {{if .Error}}
+  <div style="background:rgba(224,133,133,0.08);border:1px solid rgba(224,133,133,0.2);color:#e08585;padding:12px 16px;border-radius:10px;font-size:13px;margin-bottom:20px;display:flex;align-items:flex-start;gap:10px">
+    <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:#e08585;fill:none;stroke-width:2;stroke-linecap:round;flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span>{{.Error}}</span>
+  </div>
+  {{end}}
+
+  {{if .Proxies}}
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;padding:12px 14px;background:var(--elev);border:1px solid var(--hair);border-radius:10px">
+    <svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:var(--accent);fill:none;stroke-width:1.8;flex-shrink:0"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/></svg>
+    <div style="flex:1;font-size:12px;color:var(--muted)">Login via proxy:<br><span style="font-size:10px;color:var(--faint)">Captcha diverifikasi dari IP browser kamu — kalau stuck "Verifying...", pakai IP utama.</span></div>
+    <div id="login-proxy" style="flex:1;min-width:150px"></div>
+  </div>
+  {{end}}
+
+  <!-- Step 1: Captcha -->
+  <div id="step-captcha" {{if not .CaptchaEnabled}}style="display:none"{{end}}>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div class="icon-circle" style="border-color:rgba(99,102,241,0.35)">
+        <span style="font-size:13px;font-weight:700;color:var(--accent)">1</span>
+      </div>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:#e7e7ec">Verifikasi captcha</div>
+        <div style="font-size:12px;color:#6b6b76">Buktikan kamu manusia sebelum lanjut</div>
+      </div>
+      <svg id="check-captcha" viewBox="0 0 24 24" style="width:18px;height:18px;stroke:var(--ok);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;margin-left:auto;opacity:0;transition:opacity .3s"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div id="captcha-zone"></div>
+    <button id="captcha-btn" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px" disabled>
+      <svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Mulai Verifikasi
+    </button>
+  </div>
+
+  <!-- Step 2: OAuth -->
+  <div id="step-oauth" {{if .CaptchaEnabled}}style="display:none"{{end}}>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;{{if .CaptchaEnabled}}padding-top:16px;border-top:1px dashed #2a2a34;margin-top:4px{{end}}">
+      <div class="icon-circle" style="border-color:rgba(99,102,241,0.35)">
+        <span style="font-size:13px;font-weight:700;color:var(--accent)">{{if .CaptchaEnabled}}2{{else}}1{{end}}</span>
+      </div>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:#e7e7ec">Login ke Z.ai</div>
+        <div style="font-size:12px;color:#6b6b76">Tab baru akan terbuka — setelah login kamu otomatis balik ke panel</div>
+      </div>
+    </div>
+    <button id="oauth-btn" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px">
+      <svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      Login via Z.ai
+    </button>
+  </div>
+
+  <!-- Status -->
+  <div id="status" style="display:none;align-items:flex-start;gap:10px;font-size:13px;color:var(--muted);margin-top:18px;padding:12px 16px;border-radius:10px;background:#121218;border:1px solid #1f1f26">
+    <svg id="status-spinner" viewBox="0 0 24 24" style="width:15px;height:15px;stroke:var(--accent);fill:none;stroke-width:2.4;stroke-linecap:round;animation:oauthspin 1s linear infinite;display:none"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+    <span id="status-text"></span>
+  </div>
+  </div>
+</div>
+
+<style>@keyframes oauthspin{from{transform:rotate(0)}to{transform:rotate(360deg)}}</style>
+
+<script src="https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js"></script>
+<script>
+var statusEl = document.getElementById('status');
+var statusText = document.getElementById('status-text');
+var spinner = document.getElementById('status-spinner');
+var scene = {{.Scene}}, prefix = {{.Prefix}}, region = {{.Region}};
+var captchaEnabled = {{.CaptchaEnabled}};
+var __proxyItems = [{v:'', t:'IP utama'}{{range .Proxies}}{{if .Active}}, {v:'{{.Name}}', t:'{{.Name}}'}{{end}}{{end}}];
+var __proxyCur = '{{.LoginViaProxy}}';
+var __initLoginProxy = function(){
+  buildPillDropdown('login-proxy', __proxyItems, __proxyCur || '', function(){});
+};
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', __initLoginProxy);
+else __initLoginProxy();
+
+function setStatus(msg, opts) {
+  opts = opts || {};
+  statusEl.style.display = 'flex';
+  statusText.textContent = msg;
+  statusText.style.color = opts.error ? '#e08585' : 'var(--muted)';
+  spinner.style.display = opts.busy ? 'block' : 'none';
+  statusEl.querySelectorAll('a').forEach(function(a){ a.remove(); });
+  if (opts.link) {
+    var a = document.createElement('a');
+    a.href = opts.link; a.textContent = opts.link; a.target = '_blank';
+    a.style.cssText = 'display:block;color:var(--accent);word-break:break-all;font-size:12px;margin-top:4px';
+    statusText.appendChild(a);
+  }
+}
+
+function showCaptchaDone() {
+  var c = document.getElementById('check-captcha');
+  if (c) c.style.opacity = '1';
+}
+
+var proxyItems = [{v:'', t:'IP utama'}{{range .Proxies}}{{if .Active}}, {v:'{{.Name}}', t:'{{.Name}}'}{{end}}{{end}}];
+function startOAuth(verifyParam) {
+  var goVerify = function(){
+    setStatus('Mengambil URL login Z.ai...', {busy: true});
+    fetch('/accounts/login/verify', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({verify_param: verifyParam || ''})
+    }).then(function(r){ return r.json(); }).then(function(d) {
+      if (!d.ok) { setStatus(d.msg, {error: true}); return; }
+      setStatus('Membuka halaman login Z.ai di tab baru...', {busy: true});
+      showCaptchaDone();
+      var win = window.open(d.url, '_blank');
+      if (!win) setStatus('Popup diblokir — buka link ini manual:', {error: true, link: d.url});
+    }).catch(function(e){ setStatus('Error: ' + e, {error: true}); });
+  };
+  // proxy dipilih? simpan ke sesi server via fetch (tanpa reload), lalu lanjut
+  var pv = ddGet('login-proxy');
+  var pid = 0;
+  {{range .Proxies}}{{if .Active}}if (pv === '{{.Name}}') pid = {{.ID}};{{end}}{{end}}
+  fetch('/accounts/login/proxy', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'proxy_id=' + pid
+  }).then(goVerify).catch(function(e){ setStatus('Error: ' + e, {error: true}); });
+}
+
+{{if .CaptchaEnabled}}
+function initCaptcha() {
+  if (typeof initAliyunCaptcha !== 'function') { setTimeout(initCaptcha, 500); return; }
+  var btn = document.getElementById('captcha-btn');
+  btn.disabled = false;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Mulai Verifikasi';
+  initAliyunCaptcha({
+    SceneId: scene,
+    mode: 'popup',
+    region: region,
+    prefix: prefix,
+    element: '#captcha-zone',
+    button: '#captcha-btn',
+    captchaVerifyCallback: function(param) {
+      document.getElementById('step-captcha').style.display = 'none';
+      var so = document.getElementById('step-oauth');
+      so.style.display = 'block';
+      startOAuth(param);
+      return { captchaResult: true, bizResult: true };
+    },
+    slideStyle: { width: 360, height: 40 },
+    language: 'en'
+  });
+}
+if (document.readyState === 'complete') { setTimeout(initCaptcha, 300); }
+else { window.addEventListener('load', function(){ setTimeout(initCaptcha, 300); }); }
+{{else}}
+document.getElementById('oauth-btn').addEventListener('click', function(){ startOAuth(''); });
+{{end}}
+</script>
+{{end}}

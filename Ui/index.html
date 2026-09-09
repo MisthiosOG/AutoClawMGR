@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AutoClaw</title>
+<style>
+:root{
+  --bg:#08080a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  min-height:100vh;
+  position:relative;
+  overflow:hidden;
+}
+/* subtle grid */
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
+  background-size:48px 48px;
+  pointer-events:none;
+  z-index:0;
+  mask-image:radial-gradient(ellipse 100% 85% at 50% -10%,black 25%,transparent 80%);
+  -webkit-mask-image:radial-gradient(ellipse 100% 85% at 50% -10%,black 25%,transparent 80%);
+}
+/* faint decorative circles */
+.orb{position:fixed;border-radius:50%;filter:blur(120px);z-index:0;pointer-events:none;opacity:.32}
+.orb-a{width:560px;height:560px;top:-200px;right:-160px;background:radial-gradient(circle,#8b9ce41f,transparent 70%)}
+.orb-b{width:500px;height:500px;bottom:-180px;left:-140px;background:radial-gradient(circle,#5dc6a314,transparent 70%)}
+
+/* gateway emblem — single clean motif, bottom-right, partially off-canvas */
+.bg-art{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.g-ring{fill:none;stroke:rgba(255,255,255,.06);stroke-width:1.2}
+.g-ring-soft{fill:none;stroke:rgba(255,255,255,.028);stroke-width:1.2}
+.g-ring-dash{fill:none;stroke:rgba(255,255,255,.04);stroke-width:1.2;stroke-dasharray:4 12}
+.g-keyhole{fill:none;stroke:rgba(139,156,228,.22);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.g-glow{fill:url(#ggrad)}
+</style>
+</head>
+<body>
+<div class="orb orb-a"></div>
+<div class="orb orb-b"></div>
+
+<svg class="bg-art" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <defs>
+    <radialGradient id="ggrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#8b9ce4" stop-opacity=".14"/>
+      <stop offset="55%" stop-color="#8b9ce4" stop-opacity=".05"/>
+      <stop offset="100%" stop-color="#8b9ce4" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <g transform="translate(1200,780)">
+    <circle class="g-glow" r="420"/>
+    <circle class="g-ring-soft" r="360"/>
+    <circle class="g-ring" r="280"/>
+    <circle class="g-ring-dash" r="205"/>
+    <circle class="g-ring" r="140"/>
+    <!-- keyhole -->
+    <circle class="g-keyhole" r="42"/>
+    <path class="g-keyhole" d="M-34 -8 v50 a34 34 0 0 0 68 0 v-50" transform="translate(0,-2)"/>
+  </g>
+</svg>
+</body>
+</html>

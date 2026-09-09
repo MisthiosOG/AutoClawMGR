@@ -3,7 +3,7 @@
 > Unofficial AutoClaw proxy — OpenAI-compatible API + web management panel
 
 [![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white)](https://go.dev)
-[![License](https://img.shields.io/badge/license-masantoid-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-MisthiosOG-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux-333?logo=linux)]()
 
 **autoclawpi** is a self-hosted proxy for AutoClaw that provides an OpenAI-compatible API endpoint with multi-account round-robin, auto token refresh, daily check-in, 100M token claim, and a full-featured web management panel.
@@ -51,7 +51,7 @@
 ### Install
 
 ```bash
-git clone https://github.com/hirotomasato/autoclawpi.git
+git clone https://github.com/MisthiosOG/autoclawpi.git
 cd autoclawpi
 go build -o ~/.local/bin/autoclawpi ./cmd/autoclawpi
 ```
@@ -292,8 +292,8 @@ All 7 models verified live via inference (2026-09-05):
 
 ## License
 
-masantoid — see [LICENSE](LICENSE) file for details.
+MisthiosOG — see [LICENSE](LICENSE) file for details.
 
 ---
 
-*Built by masanto*
+*Built by MisthiosOG*

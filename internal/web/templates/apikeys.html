@@ -1,0 +1,130 @@
+{{define "content"}}
+<div style="max-width:720px;margin:0 auto">
+  <div class="page-head">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div class="page-head-ic">
+        <svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+      </div>
+      <div>
+        <h1>API Keys</h1>
+        <div class="subtitle">Keys untuk endpoint OpenAI-compatible</div>
+      </div>
+    </div>
+  </div>
+  <div class="rule"></div>
+
+  {{/* Endpoint hint */}}
+  <div class="card">
+    <div class="card-top">
+      <div class="label">Endpoint</div>
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--faint);margin-top:-4px">Base URL + salah satu key di bawah = akses penuh</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+      <code id="base-url" style="flex:1;font-size:12px;padding:10px 12px;background:var(--elev);border:1px solid var(--hair2);border-radius:8px;color:var(--accent);overflow-x:auto;white-space:nowrap">{{.BaseURL}}</code>
+      <button class="btn btn-ghost" style="padding:8px 12px" onclick="copyText(document.getElementById('base-url').textContent)"><i class="fas fa-copy"></i></button>
+    </div>
+  </div>
+
+  {{/* Generate key */}}
+  <div class="card">
+    <div class="card-top">
+      <div class="label">Generate New Key</div>
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--faint);margin-top:-4px">Bikin key acak, kasih nama, lalu Add. Key langsung aktif tanpa restart.</div>
+    <form hx-post="/apikeys/add" hx-target="#apikey-msg" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+      <div style="position:relative;flex:1;min-width:140px">
+        <i class="fas fa-tag" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--faint);font-size:13px;pointer-events:none"></i>
+        <input type="text" name="name" id="key-name" placeholder="Nama (mis. laptop-kerja)" style="padding-left:36px" required>
+      </div>
+      <div style="position:relative;flex:2;min-width:180px">
+        <i class="fas fa-key" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--faint);font-size:13px;pointer-events:none"></i>
+        <input type="text" name="apikey" id="key-input" placeholder="sk-... (klik Generate atau isi manual)" style="padding-left:36px;font-size:12px;font-family:monospace" required>
+      </div>
+      <button type="button" class="btn btn-ghost" onclick="genKey()"><i class="fas fa-shuffle"></i> Generate</button>
+      <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add</button>
+    </form>
+    <div id="apikey-msg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
+  {{/* Key list */}}
+  <div class="card">
+    <div class="card-top">
+      <div class="label">Active Keys ({{len .APIKeys}})</div>
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </div>
+    </div>
+    {{if .APIKeys}}
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+      {{range .APIKeys}}
+      <div class="acct-row" style="border:1px solid var(--hair);border-radius:10px">
+        <span class="status-dot online"></span>
+        <div class="acct-info" style="min-width:0">
+          <div class="acct-email">{{.Name}}</div>
+          <div class="acct-meta" style="font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{.Key}}</div>
+        </div>
+        <button class="btn btn-ghost" style="padding:6px 10px" title="Copy key" onclick="copyText('{{.Key}}')"><i class="fas fa-copy"></i></button>
+        <button class="btn btn-danger" style="padding:6px 10px" title="Delete" onclick="deleteAPIKey('{{.Name}}')"><i class="fas fa-trash"></i></button>
+      </div>
+      {{end}}
+    </div>
+    {{else}}
+    <div style="padding:24px;text-align:center;border:1px solid var(--hair);border-radius:10px;margin-top:12px">
+      <div style="font-size:13px;color:var(--faint)">Belum ada key — generate satu di atas</div>
+    </div>
+    {{end}}
+  </div>
+
+  {{/* Cara pakai */}}
+  <div class="card">
+    <div class="card-top">
+      <div class="label">Cara Pakai</div>
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      </div>
+    </div>
+    <pre style="margin:10px 0 0;padding:12px;background:var(--elev);border:1px solid var(--hair2);border-radius:8px;font-size:11.5px;overflow-x:auto;color:var(--muted)">from openai import OpenAI
+
+client = OpenAI(
+    base_url="{{.BaseURL}}",
+    api_key="sk-..."
+)
+r = client.chat.completions.create(
+    model="auto",
+    messages=[{"role": "user", "content": "halo"}]
+)</pre>
+  </div>
+
+</div>
+<script>
+function genKey(){
+  var b=new Uint8Array(24);
+  crypto.getRandomValues(b);
+  var c='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  var k='sk-';
+  for(var i=0;i<b.length;i++)k+=c[b[i]%c.length];
+  document.getElementById('key-input').value=k;
+  if(!document.getElementById('key-name').value){
+    document.getElementById('key-name').focus();
+  }
+}
+function copyText(t){
+  navigator.clipboard.writeText(t.trim()).then(function(){
+    var el=document.getElementById('apikey-msg');
+    el.innerHTML='<span style="color:var(--ok)">Copied to clipboard</span>';
+    setTimeout(function(){el.innerHTML='';},1500);
+  });
+}
+function deleteAPIKey(name){
+  if(!confirm('Delete key "'+name+'"?'))return;
+  fetch('/apikeys/delete',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'name='+encodeURIComponent(name)})
+  .then(function(){location.reload();});
+}
+</script>
+{{end}}

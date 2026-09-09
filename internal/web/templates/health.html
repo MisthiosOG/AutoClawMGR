@@ -1,41 +1,43 @@
 {{define "content"}}
-<div style="margin-bottom:28px;display:flex;align-items:center;justify-content:space-between">
-  <div>
-    <h1 style="font-size:24px;font-weight:700;margin-bottom:6px;letter-spacing:-.02em">Health Check</h1>
-    <p style="color:#64748b;font-size:14px">Verify all accounts are working properly</p>
+<div class="page-head">
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="page-head-ic">
+      <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+    </div>
+    <div>
+      <h1>Health Check</h1>
+      <div class="subtitle">Test & refresh token semua akun sekaligus</div>
+    </div>
   </div>
   <button class="btn btn-primary" onclick="runHealth()" id="health-btn">
     <i class="fas fa-stethoscope"></i> Run Check
   </button>
 </div>
+<div class="rule"></div>
 
 <div id="health-results">
   {{range .Accounts}}
-  <div class="glass" style="padding:16px 20px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
-    <div style="display:flex;align-items:center;gap:14px">
-      <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:700">
-        {{if .Name}}{{slice .Name 0 1}}{{else}}A{{end}}
-      </div>
-      <div>
-        <div style="font-weight:600;font-size:14px;color:#f1f5f9">{{if .Name}}{{.Name}}{{else}}Account #{{.ID}}{{end}}</div>
-        <div style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:10px;margin-top:3px">
-          <span class="badge {{if .Active}}badge-success{{else}}badge-danger{{end}}">
-            <i class="fas fa-circle" style="font-size:7px"></i>
-            {{if .Active}}Active{{else}}Inactive{{end}}
-          </span>
-          <span><i class="fas fa-coins" style="color:#fbbf24"></i> {{.Points}} pts</span>
-        </div>
+  <div class="acct-row" style="margin-bottom:8px;border:1px solid #1c1c22;border-radius:12px">
+    <div class="icon-circle" style="width:38px;height:38px;background:rgba(139,156,228,.12);border-color:rgba(139,156,228,.3);border-radius:11px;font-weight:700;color:#8b9ce4;font-size:14px">
+      {{if .Name}}{{slice .Name 0 1}}{{else}}A{{end}}
+    </div>
+    <div class="acct-info">
+      <div class="acct-email">{{if .Name}}{{.Name}}{{else}}Account #{{.ID}}{{end}}</div>
+      <div class="acct-meta" style="display:flex;align-items:center;gap:10px;margin-top:3px">
+        <span class="badge {{if .Active}}badge-success{{else}}badge-danger{{end}}">
+          <i class="fas fa-circle" style="font-size:6px"></i>
+          {{if .Active}}Active{{else}}Inactive{{end}}
+        </span>
+        <span><i class="fas fa-coins" style="color:#f5c86a;font-size:10px"></i> {{.Points}} pts</span>
       </div>
     </div>
-    <div>
-      <span id="status-{{.ID}}" class="badge badge-info"><i class="fas fa-clock"></i> Pending</span>
-    </div>
+    <span id="status-{{.ID}}" class="badge badge-muted"><i class="fas fa-clock"></i> Pending</span>
   </div>
   {{else}}
-  <div class="glass" style="padding:50px;text-align:center">
-    <i class="fas fa-users" style="font-size:44px;color:rgba(255,255,255,0.06);margin-bottom:16px"></i>
-    <div style="font-size:16px;font-weight:600;margin-bottom:6px;color:#94a3b8">No accounts</div>
-    <p style="color:#475569;font-size:13px">Add an account first</p>
+  <div class="card" style="padding:50px;text-align:center;max-width:500px;margin:0 auto">
+    <i class="fas fa-users" style="font-size:40px;color:#2a2a34;margin-bottom:16px;display:block"></i>
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px">No accounts</div>
+    <div class="acct-meta">Add an account first</div>
   </div>
   {{end}}
 </div>
@@ -43,16 +45,15 @@
 <script>
 function runHealth(){
   var btn=document.getElementById('health-btn');
-  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Checking...';
+  btn.disabled=true;
+  btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Checking...';
   document.querySelectorAll('[id^="status-"]').forEach(function(el){el.className='badge badge-info';el.innerHTML='<i class="fas fa-spinner fa-spin"></i> Testing...'});
   fetch('/health/run',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
-    d.results.forEach(function(r){
+    (d.results||[]).forEach(function(r){
       var el=document.getElementById('status-'+r.id);
-      if(el){
-        if(r.ok){el.className='badge badge-success';el.innerHTML='<i class="fas fa-check-circle"></i> OK';}
-        else if(r.refreshed){el.className='badge badge-warning';el.innerHTML='<i class="fas fa-sync"></i> Refreshed';}
-        else{el.className='badge badge-danger';el.innerHTML='<i class="fas fa-times-circle"></i> '+r.error;}
-      }
+      if(!el) return;
+      if(r.ok){el.className='badge badge-success';el.innerHTML='<i class="fas fa-check-circle"></i> OK · refreshed';}
+      else{el.className='badge badge-danger';el.innerHTML='<i class="fas fa-times-circle"></i> '+(r.error||'failed');}
     });
     btn.disabled=false;btn.innerHTML='<i class="fas fa-stethoscope"></i> Run Check';
   }).catch(function(e){

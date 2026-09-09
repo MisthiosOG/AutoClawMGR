@@ -1,105 +1,118 @@
 {{define "content"}}
-<div style="margin-bottom:28px">
-  <h1 style="font-size:24px;font-weight:700;margin-bottom:6px;letter-spacing:-.02em">API Documentation</h1>
-  <p style="color:#64748b;font-size:14px">OpenAI-compatible endpoints provided by autoclawpi</p>
-</div>
-
-<div class="glass" style="padding:20px;margin-bottom:16px">
-  <h3 style="font-size:15px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px">
-    <i class="fas fa-globe" style="color:#818cf8"></i> Base URL
-  </h3>
-  <div style="background:rgba(0,0,0,0.3);padding:12px 16px;border-radius:10px;font-family:mono;font-size:13px;color:#60a5fa">
-    http://localhost:8787
-  </div>
-  <div style="margin-top:8px;font-size:12px;color:#64748b">Replace <code style="color:#94a3b8">localhost:8787</code> with your server address.</div>
-</div>
-
-<div class="glass" style="padding:20px;margin-bottom:16px">
-  <h3 style="font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px">
-    <i class="fas fa-list" style="color:#818cf8"></i> Available Models
-  </h3>
-  <div style="display:flex;flex-wrap:wrap;gap:6px">
-    {{range .Models}}
-    <span class="badge badge-info"><i class="fas fa-robot"></i> {{.}}</span>
-    {{else}}
-    <span style="color:#64748b;font-size:13px">No models loaded</span>
-    {{end}}
-  </div>
-</div>
-
-<div class="glass" style="padding:20px;margin-bottom:16px">
-  <h3 style="font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px">
-    <i class="fas fa-exchange-alt" style="color:#818cf8"></i> Endpoints
-  </h3>
-  <div style="display:grid;gap:16px">
-    <div style="background:rgba(0,0,0,0.2);border-radius:12px;padding:16px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span class="badge badge-success" style="font-size:10px">GET</span>
-        <code style="font-size:13px;color:#e2e8f0">/v1/models</code>
-      </div>
-      <p style="font-size:12px;color:#64748b;margin-bottom:8px">List available models. No authentication required.</p>
-      <div style="background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;font-family:mono;font-size:12px;color:#60a5fa">
-        curl http://localhost:8787/v1/models
-      </div>
-    </div>
-
-    <div style="background:rgba(0,0,0,0.2);border-radius:12px;padding:16px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span class="badge badge-warning" style="font-size:10px">POST</span>
-        <code style="font-size:13px;color:#e2e8f0">/v1/chat/completions</code>
-      </div>
-      <p style="font-size:12px;color:#64748b;margin-bottom:8px">Send a chat completion request. OpenAI-compatible format.</p>
-      <div style="background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;font-family:mono;font-size:12px;color:#60a5fa">
-        curl -X POST http://localhost:8787/v1/chat/completions \<br>
-        &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
-        &nbsp;&nbsp;-d '{"model":"glm-5-turbo","messages":[{"role":"user","content":"halo"}]}'
-      </div>
+<div style="display:flex;flex-direction:column;gap:14px;max-width:760px;margin:0 auto">
+  <div class="page-head">
+    <div>
+      <h1>API Documentation</h1>
+      <div class="subtitle">OpenAI-compatible endpoints provided by autoclawpi</div>
     </div>
   </div>
-</div>
+  <div class="rule"></div>
 
-<div class="glass" style="padding:20px;margin-bottom:16px">
-  <h3 style="font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px">
-    <i class="fas fa-cog" style="color:#818cf8"></i> Parameters
-  </h3>
-  <div style="overflow-x:auto">
-    <table style="width:100%;font-size:13px;border-collapse:collapse">
-      <tr style="border-bottom:1px solid rgba(255,255,255,0.06)">
-        <th style="text-align:left;padding:10px 12px;color:#64748b;font-weight:600">Parameter</th>
-        <th style="text-align:left;padding:10px 12px;color:#64748b;font-weight:600">Type</th>
-        <th style="text-align:left;padding:10px 12px;color:#64748b;font-weight:600">Description</th>
-      </tr>
-      <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
-        <td style="padding:10px 12px"><code>model</code></td>
-        <td style="padding:10px 12px;color:#94a3b8">string</td>
-        <td style="padding:10px 12px;color:#64748b">Model ID (e.g., glm-5-turbo, glm-5.3, deepseek-v4-pro)</td>
-      </tr>
-      <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
-        <td style="padding:10px 12px"><code>messages</code></td>
-        <td style="padding:10px 12px;color:#94a3b8">array</td>
-        <td style="padding:10px 12px;color:#64748b">Chat messages [{role, content}]</td>
-      </tr>
-      <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
-        <td style="padding:10px 12px"><code>stream</code></td>
-        <td style="padding:10px 12px;color:#94a3b8">bool</td>
-        <td style="padding:10px 12px;color:#64748b">Enable SSE streaming (default: false)</td>
-      </tr>
-      <tr>
-        <td style="padding:10px 12px"><code>max_tokens</code></td>
-        <td style="padding:10px 12px;color:#94a3b8">int</td>
-        <td style="padding:10px 12px;color:#64748b">Maximum tokens in response</td>
-      </tr>
-    </table>
+  <div class="card">
+    <div class="card-top">
+      <div class="label">Base URL</div>
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/></svg>
+      </div>
+    </div>
+    <div style="font-size:13px;background:var(--bg);border:1px solid var(--hair);border-radius:10px;padding:12px 14px;color:var(--muted)">{{.BaseURL}}</div>
+    <div style="font-size:12px;color:var(--faint);margin-top:8px">Endpoint ini mengikuti address yang kamu pakai sekarang.</div>
   </div>
-</div>
 
-<div class="glass" style="padding:20px">
-  <h3 style="font-size:15px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px">
-    <i class="fas fa-shield-alt" style="color:#818cf8"></i> Authentication
-  </h3>
-  <p style="font-size:12px;color:#64748b;margin-bottom:8px">If an API key is configured in Settings, include it as a header:</p>
-  <div style="background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;font-family:mono;font-size:12px;color:#60a5fa">
-    curl -H "Authorization: Bearer sk-your-key-here" http://localhost:8787/v1/models
+  <div class="card">
+    <div class="card-top">
+      <div class="label">Available Models</div>
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      {{range .Models}}
+      <span style="font-size:11px;padding:4px 10px;background:#18181e;border:1px solid #2a2a34;border-radius:7px;color:var(--muted)">{{.}}</span>
+      {{else}}
+      <span style="color:var(--faint);font-size:13px">No models loaded</span>
+      {{end}}
+    </div>
   </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="label">Endpoints</div>
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+
+      <div style="border:1px solid var(--hair);border-radius:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:var(--ok);color:var(--bg)">GET</span>
+          <code style="font-size:13px;color:#e7e7ec">/v1/models</code>
+        </div>
+        <div style="font-size:12px;color:var(--faint);margin-bottom:8px">List available models. No authentication required.</div>
+        <div style="font-size:12px;background:var(--bg);border:1px solid var(--hair);border-radius:8px;padding:10px;color:var(--muted)">curl {{.BaseURL}}/v1/models</div>
+      </div>
+
+      <div style="border:1px solid var(--hair);border-radius:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:var(--gold);color:var(--bg)">POST</span>
+          <code style="font-size:13px;color:#e7e7ec">/v1/chat/completions</code>
+        </div>
+        <div style="font-size:12px;color:var(--faint);margin-bottom:8px">Send a chat completion request. OpenAI-compatible format.</div>
+        <div style="font-size:12px;background:var(--bg);border:1px solid var(--hair);border-radius:8px;padding:10px;color:var(--muted)">curl -X POST {{.BaseURL}}/v1/chat/completions \<br>&nbsp;&nbsp;-H "Content-Type: application/json" \<br>&nbsp;&nbsp;-d '{"model":"glm-5-turbo","messages":[{"role":"user","content":"halo"}]}'</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="label">Parameters</div>
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr style="border-bottom:1px solid var(--hair)">
+          <th style="text-align:left;padding:10px 12px;color:var(--faint);font-weight:600">Parameter</th>
+          <th style="text-align:left;padding:10px 12px;color:var(--faint);font-weight:600">Type</th>
+          <th style="text-align:left;padding:10px 12px;color:var(--faint);font-weight:600">Description</th>
+        </tr>
+        <tr style="border-bottom:1px solid var(--hair)">
+          <td style="padding:10px 12px"><code style="color:var(--muted)">model</code></td>
+          <td style="padding:10px 12px;color:#9a9aa6">string</td>
+          <td style="padding:10px 12px;color:var(--faint)">Model ID (e.g., glm-5-turbo, glm-5.3, deepseek-v4-pro)</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--hair)">
+          <td style="padding:10px 12px"><code style="color:var(--muted)">messages</code></td>
+          <td style="padding:10px 12px;color:#9a9aa6">array</td>
+          <td style="padding:10px 12px;color:var(--faint)">Chat messages [{role, content}]</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--hair)">
+          <td style="padding:10px 12px"><code style="color:var(--muted)">stream</code></td>
+          <td style="padding:10px 12px;color:#9a9aa6">bool</td>
+          <td style="padding:10px 12px;color:var(--faint)">Enable SSE streaming (default: false)</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px"><code style="color:var(--muted)">max_tokens</code></td>
+          <td style="padding:10px 12px;color:#9a9aa6">int</td>
+          <td style="padding:10px 12px;color:var(--faint)">Maximum tokens in response</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="label">Authentication</div>
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--faint);margin-bottom:8px">If an API key is configured in Settings, include it as a header:</div>
+    <div style="font-size:12px;background:var(--bg);border:1px solid var(--hair);border-radius:8px;padding:10px;color:var(--muted)">curl -H "Authorization: Bearer YOUR_KEY" {{.BaseURL}}/v1/models</div>
+  </div>
+
 </div>
 {{end}}
